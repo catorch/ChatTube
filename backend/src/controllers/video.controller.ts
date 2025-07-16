@@ -199,6 +199,13 @@ export async function searchVideoChunks(req: Request, res: Response) {
       $unwind: "$video",
     });
 
+    // Exclude embedding field from response
+    pipeline.push({
+      $project: {
+        embedding: 0,
+      },
+    });
+
     // Execute vector search
     const chunks = await VideoChunk.aggregate(pipeline);
 

@@ -1,8 +1,5 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://localhost:27017/chattube";
-
 class Database {
   private static instance: Database;
   private isConnected: boolean = false;
@@ -23,12 +20,11 @@ class Database {
     }
 
     try {
-      await mongoose.connect(MONGODB_URI, {
+      await mongoose.connect(process.env.MONGODB_URI!, {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
         bufferCommands: false,
-        bufferMaxEntries: 0,
       });
 
       this.isConnected = true;
@@ -76,4 +72,3 @@ class Database {
 const database = Database.getInstance();
 
 export default database;
-export { mongoose };

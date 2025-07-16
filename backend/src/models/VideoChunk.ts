@@ -9,12 +9,6 @@ export interface IVideoChunk extends Document {
   embedding: number[]; // vector embedding for MongoDB Vector Search
   tokenCount: number;
   audioSource?: "whisper" | "youtube-transcript"; // Track the source of transcription
-  whisperModel?: string; // Track which Whisper model was used
-  // Whisper-specific metadata
-  whisperSegmentId?: number; // Original segment ID from Whisper
-  avgLogProb?: number; // Average log probability from Whisper
-  noSpeechProb?: number; // No speech probability from Whisper
-  compressionRatio?: number; // Compression ratio from Whisper
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,10 +60,6 @@ const VideoChunkSchema = new Schema<IVideoChunk>(
       type: String,
       enum: ["whisper", "youtube-transcript"],
       default: "whisper",
-    },
-    whisperModel: {
-      type: String,
-      default: "whisper-1",
     },
   },
   {

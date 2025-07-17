@@ -13,8 +13,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.56.0",
     "@distube/ytdl-core": "^4.16.12",
     "@google/genai": "^1.9.0",
+    "@google/generative-ai": "^0.24.1",
     "@types/cookie-parser": "^1.4.8",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",

@@ -2,7 +2,17 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '@/lib/hooks';
-import { addMessage, setCurrentInput, setLoading } from '@/lib/features/chat/chatSlice';
+import { 
+  sendMessage, 
+  setCurrentInput, 
+  setSelectedProvider,
+  clearMessages,
+  setCurrentChatId,
+  startStreaming,
+  stopStreaming,
+  handleStreamEvent
+} from '@/lib/features/chat/chatSlice';
+import { chatApi } from '@/lib/api/services/chat';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -17,14 +27,25 @@ import {
   ThumbsUp,
   ThumbsDown,
   Sparkles,
-  MessageCircle
+  MessageCircle,
+  ChevronDown
 } from 'lucide-react';
 
 export function ChatPanel() {
   const dispatch = useAppDispatch();
-  const { messages, isLoading, currentInput } = useAppSelector((state) => state.chat);
+  const { 
+    messages, 
+    isLoading, 
+    currentInput, 
+    currentChatId, 
+    selectedProvider, 
+    error,
+    streamingMessageId,
+    activeStream
+  } = useAppSelector((state) => state.chat);
   const { selectedSources } = useAppSelector((state) => state.sources);
   const [inputValue, setInputValue] = useState('');
+  const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -36,34 +57,58 @@ export function ChatPanel() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
-
-    const userMessage = {
-      id: Date.now().toString(),
-      content: inputValue,
-      isUser: true,
-      timestamp: new Date(),
-      sources: selectedSources,
+  // Initialize chat on component mount
+  useEffect(() => {
+    const initializeChat = async () => {
+      if (!currentChatId) {
+        try {
+          const response = await chatApi.createChat('New Chat');
+          dispatch(setCurrentChatId(response.chat._id));
+        } catch (error) {
+          console.error('Failed to create chat:', error);
+        }
+      }
     };
 
-    dispatch(addMessage(userMessage));
-    setInputValue('');
-    dispatch(setLoading(true));
+    initializeChat();
+  }, [currentChatId, dispatch]);
 
-    // Simulate API call
-    setTimeout(() => {
-      const aiMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `I understand you asked: "${inputValue}". I've searched through ${selectedSources.length} selected sources to provide you with accurate information. Based on the content analysis, here's what I found...`,
-        isUser: false,
-        timestamp: new Date(),
-        sources: selectedSources,
-      };
-      dispatch(addMessage(aiMessage));
-      dispatch(setLoading(false));
-    }, 1500);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim() || isLoading || !currentChatId) return;
+
+    const content = inputValue.trim();
+    setInputValue('');
+
+    try {
+      // Use streaming instead of regular send
+      const eventSource = chatApi.streamMessage(
+        currentChatId,
+        {
+          content,
+          videoIds: selectedSources,
+          provider: selectedProvider,
+        },
+        (event) => {
+          dispatch(handleStreamEvent(event));
+        }
+      );
+
+      dispatch(startStreaming({ messageId: 'temp', stream: eventSource }));
+
+      // Clean up event source when complete or error
+      eventSource.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'complete' || data.type === 'error') {
+          dispatch(stopStreaming());
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setInputValue(content);
+      dispatch(stopStreaming());
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -99,14 +144,56 @@ export function ChatPanel() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Settings className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {/* LLM Provider Selector */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsProviderDropdownOpen(!isProviderDropdownOpen)}
+                className="text-xs capitalize"
+              >
+                {selectedProvider}
+                <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+              
+              {isProviderDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[100px]">
+                  {(['openai', 'anthropic', 'google'] as const).map((provider) => (
+                    <button
+                      key={provider}
+                      onClick={() => {
+                        dispatch(setSelectedProvider(provider));
+                        setIsProviderDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs capitalize hover:bg-accent first:rounded-t-lg last:rounded-b-lg ${
+                        selectedProvider === provider ? 'bg-accent' : ''
+                      }`}
+                    >
+                      {provider}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              onClick={() => dispatch(clearMessages())}
+              title="Clear chat"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -145,6 +232,9 @@ export function ChatPanel() {
                   >
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
+                      {message.isStreaming && (
+                        <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
+                      )}
                     </p>
                   </div>
                   
@@ -255,10 +345,13 @@ export function ChatPanel() {
               <span className="sm:hidden">Enter to send</span>
               {selectedSources.length > 0 && (
                 <Badge variant="outline" className="text-xs">
-                  <span className="hidden sm:inline">Searching </span>
+                  <span className="hidden sm:inline">Vector search: </span>
                   {selectedSources.length} sources
                 </Badge>
               )}
+              <Badge variant="outline" className="text-xs capitalize">
+                {selectedProvider}
+              </Badge>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <div className="w-2 h-2 bg-emerald-500 rounded-full" />

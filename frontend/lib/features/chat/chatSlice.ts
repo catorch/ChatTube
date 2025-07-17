@@ -1,5 +1,10 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
-import { chatApi, SendMessageRequest, Message as ApiMessage, StreamEvent } from "../../api/services/chat";
+import {
+  chatApi,
+  SendMessageRequest,
+  Message as ApiMessage,
+  StreamEvent,
+} from "../../api/services/chat";
 
 export interface Message {
   id: string;
@@ -21,29 +26,29 @@ interface ChatState {
   error: string | null;
   currentInput: string;
   currentChatId: string | null;
-  selectedProvider: 'openai' | 'anthropic' | 'google';
+  selectedProvider: "openai" | "anthropic" | "google";
   streamingMessageId: string | null;
-  activeStream: EventSource | null;
+  // Removed activeStream - streams will be handled outside Redux
 }
 
 // Async thunks
 export const sendMessage = createAsyncThunk(
-  'chat/sendMessage',
+  "chat/sendMessage",
   async (
-    { 
-      chatId, 
-      content, 
-      selectedSources 
-    }: { 
-      chatId: string; 
-      content: string; 
-      selectedSources: string[] 
+    {
+      chatId,
+      content,
+      selectedSources,
+    }: {
+      chatId: string;
+      content: string;
+      selectedSources: string[];
     },
     { getState }
   ) => {
     const state = getState() as any;
     const provider = state.chat.selectedProvider;
-    
+
     const request: SendMessageRequest = {
       content,
       videoIds: selectedSources,
@@ -56,7 +61,7 @@ export const sendMessage = createAsyncThunk(
 );
 
 export const loadChatMessages = createAsyncThunk(
-  'chat/loadMessages',
+  "chat/loadMessages",
   async (chatId: string) => {
     const response = await chatApi.getChatMessages(chatId);
     return response;
@@ -67,7 +72,7 @@ export const loadChatMessages = createAsyncThunk(
 const convertApiMessage = (apiMessage: ApiMessage): Message => ({
   id: apiMessage._id,
   content: apiMessage.content,
-  isUser: apiMessage.role === 'user',
+  isUser: apiMessage.role === "user",
   timestamp: new Date(apiMessage.createdAt),
   sources: [], // We'll populate this from video references if needed
   metadata: apiMessage.metadata,
@@ -79,9 +84,9 @@ const initialState: ChatState = {
   error: null,
   currentInput: "",
   currentChatId: null,
-  selectedProvider: 'openai',
+  selectedProvider: "openai",
   streamingMessageId: null,
-  activeStream: null,
+  // Removed activeStream - streams will be handled outside Redux
 };
 
 const chatSlice = createSlice({
@@ -106,34 +111,37 @@ const chatSlice = createSlice({
     setCurrentChatId: (state, action: PayloadAction<string | null>) => {
       state.currentChatId = action.payload;
     },
-    setSelectedProvider: (state, action: PayloadAction<'openai' | 'anthropic' | 'google'>) => {
+    setSelectedProvider: (
+      state,
+      action: PayloadAction<"openai" | "anthropic" | "google">
+    ) => {
       state.selectedProvider = action.payload;
     },
-    startStreaming: (state, action: PayloadAction<{ messageId: string; stream: EventSource }>) => {
+    startStreaming: (
+      state,
+      action: PayloadAction<{
+        messageId: string;
+      }>
+    ) => {
       state.streamingMessageId = action.payload.messageId;
-      state.activeStream = action.payload.stream;
       state.isLoading = true;
     },
     stopStreaming: (state) => {
-      if (state.activeStream) {
-        state.activeStream.close();
-      }
       state.streamingMessageId = null;
-      state.activeStream = null;
       state.isLoading = false;
     },
     handleStreamEvent: (state, action: PayloadAction<StreamEvent>) => {
       const event = action.payload;
-      
+
       switch (event.type) {
-        case 'user_message':
-          if (event.message && typeof event.message === 'object') {
+        case "user_message":
+          if (event.message && typeof event.message === "object") {
             const userMessage = convertApiMessage(event.message as ApiMessage);
             state.messages.push(userMessage);
           }
           break;
-          
-        case 'start':
+
+        case "start":
           if (event.messageId) {
             const aiMessage: Message = {
               id: event.messageId,
@@ -145,19 +153,23 @@ const chatSlice = createSlice({
             state.messages.push(aiMessage);
           }
           break;
-          
-        case 'delta':
+
+        case "delta":
           if (event.messageId && event.content) {
-            const messageIndex = state.messages.findIndex(msg => msg.id === event.messageId);
+            const messageIndex = state.messages.findIndex(
+              (msg) => msg.id === event.messageId
+            );
             if (messageIndex !== -1) {
               state.messages[messageIndex].content += event.content;
             }
           }
           break;
-          
-        case 'complete':
+
+        case "complete":
           if (event.messageId) {
-            const messageIndex = state.messages.findIndex(msg => msg.id === event.messageId);
+            const messageIndex = state.messages.findIndex(
+              (msg) => msg.id === event.messageId
+            );
             if (messageIndex !== -1) {
               state.messages[messageIndex].isStreaming = false;
               if (event.videoReferences) {
@@ -173,9 +185,12 @@ const chatSlice = createSlice({
           state.isLoading = false;
           state.currentInput = "";
           break;
-          
-        case 'error':
-          state.error = typeof event.message === 'string' ? event.message : 'Stream error occurred';
+
+        case "error":
+          state.error =
+            typeof event.message === "string"
+              ? event.message
+              : "Stream error occurred";
           state.streamingMessageId = null;
           state.isLoading = false;
           break;

@@ -104,6 +104,8 @@ export const store = configureStore({
         ignoredPaths: [
           "sources.sources", // Array of sources with lastUpdated dates
           "chat.messages", // Array of messages with timestamp dates
+          "auth.user.createdAt", // User creation date
+          "auth.user.updatedAt", // User update date
         ],
       },
     }),

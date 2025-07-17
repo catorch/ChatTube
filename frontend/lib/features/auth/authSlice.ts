@@ -4,6 +4,7 @@ import { User, LoginRequest, SignupRequest } from "../../api/types";
 
 interface AuthState {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean; // To track if we've checked auth status on app load
@@ -14,6 +15,7 @@ interface AuthState {
 
 const initialState: AuthState = {
   user: null,
+  token: null, // Will be handled by redux-persist
   isAuthenticated: false,
   isLoading: false,
   isInitialized: false,
@@ -27,7 +29,7 @@ export const login = createAsyncThunk(
   "auth/login",
   async (credentials: LoginRequest) => {
     const response = await authApi.login(credentials);
-    return response.user;
+    return { user: response.user, token: response.token };
   }
 );
 
@@ -35,18 +37,35 @@ export const signup = createAsyncThunk(
   "auth/signup",
   async (userData: SignupRequest) => {
     const response = await authApi.signup(userData);
-    return response.user;
+    return { user: response.user, token: response.token };
   }
 );
 
 export const logout = createAsyncThunk("auth/logout", async () => {
-  await authApi.logout();
+  // Redux-persist will handle clearing the token from storage
+  // Just call the API logout for any server-side cleanup
+  try {
+    await authApi.logout();
+  } catch (error) {
+    // Ignore logout API errors since token will be cleared by Redux
+    console.warn("Logout API call failed, but token will be cleared:", error);
+  }
 });
 
-export const checkAuth = createAsyncThunk("auth/checkAuth", async () => {
-  const response = await authApi.checkAuth();
-  return response.user;
-});
+export const checkAuth = createAsyncThunk(
+  "auth/checkAuth",
+  async (_, { getState }) => {
+    const state = getState() as any;
+    const token = state.auth.token;
+
+    if (!token) {
+      throw new Error("No token available");
+    }
+
+    const response = await authApi.checkAuth();
+    return response.user;
+  }
+);
 
 const authSlice = createSlice({
   name: "auth",
@@ -71,6 +90,13 @@ const authSlice = createSlice({
       state.authModalMode = action.payload;
       state.error = null;
     },
+    // Handle redux-persist rehydration
+    setAuthFromToken: (state) => {
+      if (state.token && !state.isAuthenticated) {
+        state.isAuthenticated = true;
+        state.isInitialized = true;
+      }
+    },
   },
   extraReducers: (builder) => {
     // Check auth status
@@ -90,8 +116,10 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.isInitialized = true;
         state.user = null;
+        state.token = null;
         state.isAuthenticated = false;
         state.error = null; // Don't show error for auth check failures
+        // Redux-persist will handle clearing invalid token
       })
 
       // Login
@@ -101,7 +129,8 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload;
+        state.user = action.payload.user;
+        state.token = action.payload.token || null;
         state.isAuthenticated = true;
         state.showAuthModal = false;
         state.error = null;
@@ -118,7 +147,8 @@ const authSlice = createSlice({
       })
       .addCase(signup.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload;
+        state.user = action.payload.user;
+        state.token = action.payload.token || null;
         state.isAuthenticated = true;
         state.showAuthModal = false;
         state.error = null;
@@ -136,6 +166,7 @@ const authSlice = createSlice({
       .addCase(logout.fulfilled, (state) => {
         state.isLoading = false;
         state.user = null;
+        state.token = null;
         state.isAuthenticated = false;
         state.error = null;
       })
@@ -143,6 +174,19 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.error.message || "Logout failed";
       });
+
+    // Handle redux-persist REHYDRATE action (must come after all addCase calls)
+    builder.addMatcher(
+      (action) => action.type === "persist/REHYDRATE",
+      (state, action: any) => {
+        if (action.payload?.auth?.token && !state.isAuthenticated) {
+          state.isAuthenticated = true;
+          state.isInitialized = true;
+        } else if (!action.payload?.auth?.token) {
+          state.isInitialized = true;
+        }
+      }
+    );
   },
 });
 
@@ -152,6 +196,7 @@ export const {
   showAuthModal,
   hideAuthModal,
   switchAuthMode,
+  setAuthFromToken,
 } = authSlice.actions;
 
 export default authSlice.reducer;

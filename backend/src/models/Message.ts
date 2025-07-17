@@ -34,7 +34,10 @@ const MessageSchema = new Schema<IMessage>(
     },
     content: {
       type: String,
-      required: true,
+      required: function (this: IMessage) {
+        // Allow empty content for assistant messages (used for streaming)
+        return this.role !== "assistant";
+      },
       trim: true,
     },
     metadata: {

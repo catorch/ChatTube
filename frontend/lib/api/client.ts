@@ -3,6 +3,22 @@ import { handleAuthError } from "./auth-interceptor";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 
+// Function to get auth token from Redux store
+const getAuthToken = (): string | null => {
+  // We'll import store dynamically to avoid circular dependencies
+  if (typeof window === "undefined") return null;
+
+  try {
+    // Access store at runtime to get current token
+    const { store } = require("../store");
+    const state = store.getState();
+    return state.auth.token;
+  } catch (error) {
+    console.warn("Failed to get token from store:", error);
+    return null;
+  }
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -39,10 +55,16 @@ class ApiClient {
       ...headers,
     };
 
+    // Add Authorization header if token exists
+    const token = getAuthToken();
+    if (token) {
+      requestHeaders.Authorization = `Bearer ${token}`;
+    }
+
     const requestConfig: RequestInit = {
       method,
       headers: requestHeaders,
-      credentials: "include", // Include cookies for authentication
+      // Removed credentials: "include" - no longer needed with JWT in headers
     };
 
     if (body && method !== "GET") {

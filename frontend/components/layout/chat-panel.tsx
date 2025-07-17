@@ -1,88 +1,126 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useAppSelector, useAppDispatch } from '@/lib/hooks';
-import { 
-  sendMessage, 
-  setCurrentInput, 
+import { useState, useRef, useEffect } from "react";
+import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import {
+  sendMessage,
+  setCurrentInput,
   setSelectedProvider,
   clearMessages,
   setCurrentChatId,
   startStreaming,
   stopStreaming,
-  handleStreamEvent
-} from '@/lib/features/chat/chatSlice';
-import { chatApi } from '@/lib/api/services/chat';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { 
-  Send, 
-  Mic, 
-  Paperclip, 
-  Settings, 
+  handleStreamEvent,
+} from "@/lib/features/chat/chatSlice";
+import { chatApi } from "@/lib/api/services/chat";
+import { Button } from "@/components/ui/button";
+
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { MarkdownMessage } from "@/components/ui/markdown-message";
+import {
+  Send,
+  Mic,
+  Paperclip,
+  Settings,
   Trash2,
   Copy,
-  ThumbsUp,
-  ThumbsDown,
+  Check,
   Sparkles,
   MessageCircle,
-  ChevronDown
-} from 'lucide-react';
+  ChevronDown,
+} from "lucide-react";
 
 export function ChatPanel() {
   const dispatch = useAppDispatch();
-  const { 
-    messages, 
-    isLoading, 
-    currentInput, 
-    currentChatId, 
-    selectedProvider, 
+  const {
+    messages,
+    isLoading,
+    currentInput,
+    currentChatId,
+    selectedProvider,
     error,
     streamingMessageId,
-    activeStream
   } = useAppSelector((state) => state.chat);
   const { selectedSources } = useAppSelector((state) => state.sources);
-  const [inputValue, setInputValue] = useState('');
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activeStreamRef = useRef<{ close: () => void } | null>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Use requestAnimationFrame to ensure DOM is updated before scrolling
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize chat on component mount
+  // Also scroll when streaming starts/stops
+  useEffect(() => {
+    if (streamingMessageId) {
+      // Small delay to ensure loading indicator is rendered
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [streamingMessageId]);
+
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      if (activeStreamRef.current) {
+        activeStreamRef.current.close();
+        activeStreamRef.current = null;
+      }
+    };
+  }, []);
+
+  // Initialize chat on component mount (only when authenticated)
   useEffect(() => {
     const initializeChat = async () => {
+      if (!isAuthenticated || !user) {
+        // Don't initialize chat if user is not authenticated
+        return;
+      }
+
       if (!currentChatId) {
         try {
-          const response = await chatApi.createChat('New Chat');
+          const response = await chatApi.createChat("New Chat");
           dispatch(setCurrentChatId(response.chat._id));
         } catch (error) {
-          console.error('Failed to create chat:', error);
+          console.error("Failed to create chat:", error);
         }
       }
     };
 
     initializeChat();
-  }, [currentChatId, dispatch]);
+  }, [currentChatId, dispatch, isAuthenticated, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || isLoading || !currentChatId) return;
+    if (!inputValue.trim() || isLoading || !currentChatId || !isAuthenticated)
+      return;
 
     const content = inputValue.trim();
-    setInputValue('');
+    setInputValue("");
+
+    // Close any existing stream before starting a new one
+    if (activeStreamRef.current) {
+      activeStreamRef.current.close();
+      activeStreamRef.current = null;
+    }
 
     try {
       // Use streaming instead of regular send
-      const eventSource = chatApi.streamMessage(
+      const streamController = await chatApi.streamMessage(
         currentChatId,
         {
           content,
@@ -91,28 +129,31 @@ export function ChatPanel() {
         },
         (event) => {
           dispatch(handleStreamEvent(event));
+
+          // Clean up when stream completes or errors
+          if (event.type === "complete" || event.type === "error") {
+            if (activeStreamRef.current) {
+              activeStreamRef.current.close();
+              activeStreamRef.current = null;
+            }
+            dispatch(stopStreaming());
+          }
         }
       );
 
-      dispatch(startStreaming({ messageId: 'temp', stream: eventSource }));
+      // Store stream controller locally for cleanup
+      activeStreamRef.current = streamController;
 
-      // Clean up event source when complete or error
-      eventSource.addEventListener('message', (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'complete' || data.type === 'error') {
-          dispatch(stopStreaming());
-        }
-      });
-
+      dispatch(startStreaming({ messageId: "temp" }));
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error("Failed to send message:", error);
       setInputValue(content);
       dispatch(stopStreaming());
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -120,7 +161,7 @@ export function ChatPanel() {
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   };
@@ -128,6 +169,24 @@ export function ChatPanel() {
   useEffect(() => {
     adjustTextareaHeight();
   }, [inputValue]);
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="flex-1 flex flex-col h-full bg-background items-center justify-center">
+        <div className="text-center py-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
+            <MessageCircle className="h-8 w-8 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Chat with Your Videos</h3>
+          <p className="text-muted-foreground max-w-md mx-auto mb-4">
+            Please sign in to start chatting with your video content and
+            sources.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background">
@@ -137,9 +196,14 @@ export function ChatPanel() {
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">ChatTube</h1>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">
+                ChatTube
+              </h1>
             </div>
-            <Badge variant="secondary" className="text-xs hidden xs:inline-flex">
+            <Badge
+              variant="secondary"
+              className="text-xs hidden xs:inline-flex"
+            >
               {selectedSources.length} sources selected
             </Badge>
           </div>
@@ -149,36 +213,40 @@ export function ChatPanel() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsProviderDropdownOpen(!isProviderDropdownOpen)}
+                onClick={() =>
+                  setIsProviderDropdownOpen(!isProviderDropdownOpen)
+                }
                 className="text-xs capitalize"
               >
                 {selectedProvider}
                 <ChevronDown className="h-3 w-3 ml-1" />
               </Button>
-              
+
               {isProviderDropdownOpen && (
                 <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[100px]">
-                  {(['openai', 'anthropic', 'google'] as const).map((provider) => (
-                    <button
-                      key={provider}
-                      onClick={() => {
-                        dispatch(setSelectedProvider(provider));
-                        setIsProviderDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs capitalize hover:bg-accent first:rounded-t-lg last:rounded-b-lg ${
-                        selectedProvider === provider ? 'bg-accent' : ''
-                      }`}
-                    >
-                      {provider}
-                    </button>
-                  ))}
+                  {(["openai", "anthropic", "google"] as const).map(
+                    (provider) => (
+                      <button
+                        key={provider}
+                        onClick={() => {
+                          dispatch(setSelectedProvider(provider));
+                          setIsProviderDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs capitalize hover:bg-accent first:rounded-t-lg last:rounded-b-lg ${
+                          selectedProvider === provider ? "bg-accent" : ""
+                        }`}
+                      >
+                        {provider}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
-            
-            <Button 
-              variant="ghost" 
-              size="sm" 
+
+            <Button
+              variant="ghost"
+              size="sm"
               className="h-8 w-8 p-0"
               onClick={() => dispatch(clearMessages())}
               title="Clear chat"
@@ -197,102 +265,160 @@ export function ChatPanel() {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4 sm:p-6">
-        <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
-          {messages.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
-                <Sparkles className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Welcome to ChatTube</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Start a conversation by asking questions about your selected sources. 
-                I&apos;ll help you explore and understand your content.
-              </p>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-4 ${message.isUser ? 'justify-end' : 'justify-start'}`}
-              >
-                {!message.isUser && (
-                  <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                    <Sparkles className="h-4 w-4 text-white" />
-                  </div>
-                )}
-                
-                <div className={`max-w-[70%] ${message.isUser ? 'order-first' : ''}`}>
-                  <div
-                    className={`p-4 max-w-fit rounded-3xl shadow-[var(--elev-1)] animate-chat-in ${
-                      message.isUser
-                        ? 'lux-gradient text-white ml-auto'
-                        : 'card-soft'
-                    } break-words`}
-                  >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {message.content}
-                      {message.isStreaming && (
-                        <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
-                      )}
-                    </p>
-                  </div>
-                  
-                  <div className={`flex items-center gap-2 mt-2 text-xs text-muted-foreground ${
-                    message.isUser ? 'justify-end' : 'justify-start'
-                  }`}>
-                    <span>{message.timestamp.toLocaleTimeString()}</span>
-                    {message.sources && message.sources.length > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        {message.sources.length} sources
-                      </Badge>
-                    )}
-                    {!message.isUser && (
-                      <div className="flex items-center gap-1 ml-2">
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <ThumbsUp className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <ThumbsDown className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth scrollbar-visible"
+        style={{ scrollbarGutter: "stable" }}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+            {messages.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
+                  <Sparkles className="h-8 w-8 text-white" />
                 </div>
+                <h3 className="text-lg font-semibold mb-2">
+                  Welcome to ChatTube
+                </h3>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  Start a conversation by asking questions about your selected
+                  sources. I&apos;ll help you explore and understand your
+                  content.
+                </p>
+              </div>
+            ) : (
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-4 ${
+                    message.isUser ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {!message.isUser && (
+                    <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
+                      <Sparkles className="h-4 w-4 text-white" />
+                    </div>
+                  )}
 
-                {message.isUser && (
-                  <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">Y</span>
+                  <div
+                    className={`max-w-[70%] ${
+                      message.isUser ? "order-first" : ""
+                    }`}
+                  >
+                    <div
+                      className={`p-4 max-w-fit rounded-3xl shadow-[var(--elev-1)] animate-chat-in ${
+                        message.isUser
+                          ? "lux-gradient text-white ml-auto"
+                          : "card-soft"
+                      } break-words`}
+                    >
+                      <MarkdownMessage
+                        content={message.content}
+                        isUser={message.isUser}
+                        isStreaming={message.isStreaming}
+                        className={message.isUser ? "text-white" : ""}
+                      />
+                    </div>
+
+                    <div
+                      className={`flex items-center gap-2 mt-2 text-xs text-muted-foreground ${
+                        message.isUser ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <span>{message.timestamp.toLocaleTimeString()}</span>
+                      {message.sources && message.sources.length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {message.sources.length} sources
+                        </Badge>
+                      )}
+                      {!message.isUser && (
+                        <div className="flex items-center gap-1 ml-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 cursor-pointer"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  message.content
+                                );
+                                setCopiedMessageId(message.id);
+                                console.log("Message copied to clipboard");
+                                // Reset the check mark after 2 seconds
+                                setTimeout(() => {
+                                  setCopiedMessageId(null);
+                                }, 2000);
+                              } catch (err) {
+                                console.error("Failed to copy message:", err);
+                                // Fallback for older browsers
+                                const textArea =
+                                  document.createElement("textarea");
+                                textArea.value = message.content;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                document.execCommand("copy");
+                                document.body.removeChild(textArea);
+                                setCopiedMessageId(message.id);
+                                setTimeout(() => {
+                                  setCopiedMessageId(null);
+                                }, 2000);
+                              }
+                            }}
+                            title={
+                              copiedMessageId === message.id
+                                ? "Copied!"
+                                : "Copy message"
+                            }
+                          >
+                            {copiedMessageId === message.id ? (
+                              <Check className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))
-          )}
-          
-          {isLoading && (
-            <div className="flex gap-4 justify-start animate-chat-in">
-              <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                <Sparkles className="h-4 w-4 text-white animate-pulse" />
-              </div>
-              <div className="card-soft p-4 rounded-3xl">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+
+                  {message.isUser && (
+                    <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">Y</span>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {isLoading && (
+              <div className="flex gap-4 justify-start animate-chat-in">
+                <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
+                  <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                </div>
+                <div className="card-soft p-4 rounded-3xl">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" />
+                      <div
+                        className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                        style={{ animationDelay: "0.1s" }}
+                      />
+                      <div
+                        className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                        style={{ animationDelay: "0.2s" }}
+                      />
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      Thinking...
+                    </span>
                   </div>
-                  <span className="text-sm text-muted-foreground">Thinking...</span>
                 </div>
               </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Input Area */}
       <div className="p-4 sm:p-6 border-t border-border bg-card/50">
@@ -308,7 +434,7 @@ export function ChatPanel() {
               rows={1}
               disabled={isLoading}
             />
-            
+
             <div className="absolute right-3 bottom-3 flex items-center gap-1 sm:gap-2">
               <Button
                 type="button"
@@ -338,10 +464,12 @@ export function ChatPanel() {
               </Button>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-2 sm:gap-4">
-              <span className="hidden sm:inline">Press Enter to send, Shift+Enter for new line</span>
+              <span className="hidden sm:inline">
+                Press Enter to send, Shift+Enter for new line
+              </span>
               <span className="sm:hidden">Enter to send</span>
               {selectedSources.length > 0 && (
                 <Badge variant="outline" className="text-xs">

@@ -259,7 +259,8 @@ export async function streamMessage(req: Request, res: Response) {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Cache-Control",
+      "Access-Control-Allow-Headers":
+        "Content-Type, Authorization, Cache-Control",
     });
 
     // Save user message
@@ -484,6 +485,17 @@ async function generateAIResponse(
       content: msg.content,
     }));
 
+    // Build reference examples from actual chunks
+    const referenceExamples = relevantChunks
+      .map(
+        (chunk, index) =>
+          `[📺 ${index + 1}](video://${chunk.video.videoId}/${Math.floor(
+            chunk.startTime
+          )})`
+      )
+      .slice(0, 2)
+      .join(" and ");
+
     // Create enhanced system prompt
     const systemPrompt = `You are a helpful AI assistant that answers questions about YouTube videos using the provided context from video transcripts.
 
@@ -492,14 +504,21 @@ ${context}
 
 Instructions:
 - Answer the user's question based on the provided video context from precise Whisper transcription segments
-- Reference specific video titles and exact timestamps (HH:MM:SS format) when relevant
-- Include YouTube URLs with timestamps when citing specific moments
+- When referencing specific video segments, use this EXACT format for clickable video references:
+  [📺 X](video://VIDEO_ID/TIMESTAMP_IN_SECONDS)
+  Where X is just the segment number (1, 2, 3, etc.), VIDEO_ID is the YouTube video ID, and TIMESTAMP_IN_SECONDS is the start time in seconds
+- For example: [📺 2](video://dQw4w9WgXcQ/84) for a reference at 1:24
+- Always include the video emoji (📺) and just the number for clean, minimal references
+- You can also mention the formatted timestamp in text for clarity: "at 14:31" or "(14:31)"
+- Include relevance scores and transcription confidence when citing sources
 - If the context doesn't contain sufficient information, acknowledge this limitation
 - Be concise but informative in your responses
 - When referencing multiple videos, distinguish between them clearly
-- Include relevance scores and transcription confidence when citing sources
 - Use the precise timestamps provided rather than approximate times
-- If asked about topics not covered in the context, suggest what additional videos might be helpful`;
+- If asked about topics not covered in the context, suggest what additional videos might be helpful
+
+Example reference format for this query:
+"The video discusses topics at ${referenceExamples}."`;
 
     const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },
@@ -602,6 +621,17 @@ async function streamAIResponse(
       content: msg.content,
     }));
 
+    // Build reference examples from actual chunks
+    const referenceExamples = relevantChunks
+      .map(
+        (chunk, index) =>
+          `[📺 ${index + 1}](video://${chunk.video.videoId}/${Math.floor(
+            chunk.startTime
+          )})`
+      )
+      .slice(0, 2)
+      .join(" and ");
+
     // Create enhanced system prompt
     const systemPrompt = `You are a helpful AI assistant that answers questions about YouTube videos using the provided context from video transcripts.
 
@@ -610,14 +640,21 @@ ${context}
 
 Instructions:
 - Answer the user's question based on the provided video context from precise Whisper transcription segments
-- Reference specific video titles and exact timestamps (HH:MM:SS format) when relevant
-- Include YouTube URLs with timestamps when citing specific moments
+- When referencing specific video segments, use this EXACT format for clickable video references:
+  [📺 X](video://VIDEO_ID/TIMESTAMP_IN_SECONDS)
+  Where X is just the segment number (1, 2, 3, etc.), VIDEO_ID is the YouTube video ID, and TIMESTAMP_IN_SECONDS is the start time in seconds
+- For example: [📺 2](video://dQw4w9WgXcQ/84) for a reference at 1:24
+- Always include the video emoji (📺) and just the number for clean, minimal references
+- You can also mention the formatted timestamp in text for clarity: "at 14:31" or "(14:31)"
+- Include relevance scores and transcription confidence when citing sources
 - If the context doesn't contain sufficient information, acknowledge this limitation
 - Be concise but informative in your responses
 - When referencing multiple videos, distinguish between them clearly
-- Include relevance scores and transcription confidence when citing sources
 - Use the precise timestamps provided rather than approximate times
-- If asked about topics not covered in the context, suggest what additional videos might be helpful`;
+- If asked about topics not covered in the context, suggest what additional videos might be helpful
+
+Example reference format for this query:
+"The video discusses topics at ${referenceExamples}."`;
 
     const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },

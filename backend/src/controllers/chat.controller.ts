@@ -380,34 +380,40 @@ async function getRelevantChunks(
 
     const queryEmbedding = embedding.data[0].embedding;
 
-    // Build aggregation pipeline for vector search
-    const pipeline: any[] = [
-      {
-        $vectorSearch: {
-          index: "vector_index",
-          path: "embedding",
-          queryVector: queryEmbedding,
-          numCandidates: 50,
-          limit: 3,
-        },
+    // Build filter object for video filtering
+    let filter: any = {};
+    if (videoIds && videoIds.length > 0) {
+      const videos = await Video.find({ videoId: { $in: videoIds } });
+      const videoObjectIds = videos.map((v) => v._id);
+      if (videoObjectIds.length > 0) {
+        filter.videoId = { $in: videoObjectIds };
+      }
+    }
+
+    // Build aggregation pipeline for vector search with filter
+    const vectorSearchStage: any = {
+      $vectorSearch: {
+        index: "vector_index",
+        path: "embedding",
+        queryVector: queryEmbedding,
+        numCandidates: 50,
+        limit: 5,
       },
+    };
+
+    // Add filter if we have video constraints
+    if (Object.keys(filter).length > 0) {
+      vectorSearchStage.$vectorSearch.filter = filter;
+    }
+
+    const pipeline: any[] = [
+      vectorSearchStage,
       {
         $addFields: {
           score: { $meta: "vectorSearchScore" },
         },
       },
     ];
-
-    // Add video filter if specified
-    if (videoIds && videoIds.length > 0) {
-      const videos = await Video.find({ videoId: { $in: videoIds } });
-      const videoObjectIds = videos.map((v) => v._id);
-      if (videoObjectIds.length > 0) {
-        pipeline.unshift({
-          $match: { videoId: { $in: videoObjectIds } },
-        });
-      }
-    }
 
     // Add population stage for video details
     pipeline.push(

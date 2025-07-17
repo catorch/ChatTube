@@ -115,16 +115,7 @@ export async function login(req: Request, res: Response) {
       expiresIn: "7d", // Token expires in 7 days
     });
 
-    // 5. Set HttpOnly Cookie
-    res.cookie("authToken", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-    });
-
-    // 6. Send Success Response
+    // 5. Send Success Response with JWT token
     return res.status(200).json({
       status: "OK",
       message: "Login successful",
@@ -141,13 +132,8 @@ export async function login(req: Request, res: Response) {
 
 // --- Logout Function ---
 export function logout(req: Request, res: Response) {
-  const cookieName = "authToken";
-  res.clearCookie(cookieName, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+  // With JWT stored in localStorage, logout is handled client-side
+  // This endpoint can be used for additional cleanup if needed in the future
   return res.status(200).json({ status: "OK", message: "Logout successful" });
 }
 

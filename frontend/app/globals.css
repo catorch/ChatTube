@@ -46,15 +46,37 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  /* Enhanced Design System Foundation */
+  --brand: oklch(0.6 0.19 264); /* electric indigo */
+  --brand-foreground: oklch(0.98 0 0);
+
+  /* Surface hierarchy for depth */
+  --surface-0: oklch(0.99 0 0); /* main background */
+  --surface-1: oklch(0.97 0 0); /* primary cards */
+  --surface-2: oklch(0.94 0 0); /* secondary surfaces */
+
+  /* Consistent radius system */
+  --r-1: 6px; /* small elements */
+  --r-2: 12px; /* standard cards */
+  --r-3: 24px; /* large elements */
+  --radius: var(--r-2); /* default radius */
+
+  /* Typography improvements */
+  --font-weight-normal: 430;
+  --font-weight-heading: 580;
+  --line-height-body: 1.55;
+  --line-height-heading: 1.3;
+  --letter-spacing-heading: -0.01em;
+
+  /* Enhanced color system */
+  --background: var(--surface-0);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+  --card: var(--surface-1);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: var(--surface-1);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -62,44 +84,48 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: var(--brand);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: var(--surface-1);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: var(--brand);
 
-  /* Luxury refinements */
-  --accent-h: 255;
-  --accent-c: 0.21;
-  --accent-l: 0.55;
-  --accent: oklch(var(--accent-l) var(--accent-c) var(--accent-h));
-  --accent-foreground: oklch(0.98 0 0);
+  /* Enhanced luxury refinements */
+  --accent-h: 264; /* electric indigo hue */
+  --accent-c: 0.19;
+  --accent-l: 0.6;
+  --accent: var(--brand);
+  --accent-foreground: var(--brand-foreground);
 
   --gold: hsl(45 80% 60%);
 
   --elev-1: 0 6px 16px -5px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.03);
   --elev-2: 0 12px 32px -8px rgb(0 0 0 / 0.08), 0 4px 8px rgb(0 0 0 / 0.04);
-
-  --surface-1: oklch(0.98 0 0);
-  --surface-2: oklch(0.95 0 0);
-  --surface-3: oklch(0.91 0 0);
 }
 
 .dark {
-  --background: oklch(0.18 0 0);
+  /* Enhanced dark mode with warmer hue */
+  --brand: oklch(0.55 0.17 260); /* slightly warmer in dark */
+  --brand-foreground: oklch(0.98 0 0);
+
+  --surface-0: oklch(0.13 0 0);
+  --surface-1: oklch(0.16 0 0);
+  --surface-2: oklch(0.2 0 0);
+
+  --background: var(--surface-0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: var(--surface-1);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: var(--surface-2);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
@@ -116,7 +142,7 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: var(--surface-1);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -125,23 +151,46 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Dark mode luxury refinements */
-  --accent: oklch(0.24 0.02 264);
-  --accent-foreground: oklch(0.98 0 0);
+  /* Dark mode luxury refinements with warmer tone */
+  --accent: var(--brand);
+  --accent-foreground: var(--brand-foreground);
   --gold: hsl(45 75% 50%);
+}
 
-  --surface-1: oklch(0.2 0 0);
-  --surface-2: oklch(0.16 0 0);
-  --surface-3: oklch(0.12 0 0);
+/* Media query fallbacks for theme preference */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --brand: oklch(0.55 0.17 260);
+    --surface-0: oklch(0.13 0 0);
+    --surface-1: oklch(0.16 0 0);
+    --surface-2: oklch(0.2 0 0);
+    --background: var(--surface-0);
+    --foreground: oklch(0.985 0 0);
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-variation-settings: "wght" var(--font-weight-normal);
+    line-height: var(--line-height-body);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-variation-settings: "wght" var(--font-weight-heading);
+    letter-spacing: var(--letter-spacing-heading);
+    line-height: var(--line-height-heading);
   }
 
   /* Smooth animations */
@@ -149,7 +198,7 @@
     scroll-behavior: smooth;
   }
 
-  /* Custom scrollbar */
+  /* Enhanced scrollbar with brand hint */
   ::-webkit-scrollbar {
     width: 8px;
   }
@@ -159,13 +208,20 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.25);
+    background: color-mix(in oklab, var(--brand) 55%, transparent);
     border-radius: 8px;
     box-shadow: inset 0 0 0 1px hsl(var(--muted-foreground) / 0.4);
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+    background: color-mix(in oklab, var(--brand) 70%, transparent);
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--brand) 55%, transparent)
+      transparent;
   }
 
   /* Gradient backgrounds */
@@ -184,7 +240,7 @@
       hsl(var(--primary)),
       hsl(var(--secondary))
     );
-    border-radius: 0.5rem;
+    border-radius: var(--r-2);
     padding: 1px;
   }
 
@@ -221,6 +277,11 @@
     backdrop-filter: blur(10px);
     background: hsl(var(--background) / 0.8);
     border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Input dock shadow for docked feeling */
+  .input-dock {
+    box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.04);
   }
 
   /* Floating animation */
@@ -260,46 +321,95 @@
     box-shadow: 0 8px 30px hsl(var(--primary) / 0.15);
   }
 
-  /* Luxury gradient helper */
+  /* Enhanced luxury gradient */
   .lux-gradient {
-    background: #0f172a;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+      135deg,
+      var(--brand) 0%,
+      color-mix(in oklab, var(--brand) 85%, black) 100%
+    );
+    position: relative;
   }
 
-  /* Soft card class */
+  .lux-gradient::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(at 30% 110%, var(--gold) 0%, transparent 60%);
+    opacity: 0.15;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* Enhanced card system */
   .card-soft {
-    @apply bg-[var(--surface-1)] shadow-[var(--elev-1)] rounded-2xl border border-border/70;
-  }
-  .dark .card-soft {
-    @apply bg-[var(--surface-2)];
+    background: var(--surface-1);
+    box-shadow: var(--elev-1);
+    border-radius: var(--r-2);
+    border: 1px solid hsl(var(--border) / 0.7);
   }
 
-  /* Luxury focus ring */
+  .dark .card-soft {
+    background: var(--surface-2);
+  }
+
+  /* Enhanced focus ring */
   .focus-lux:focus-visible {
+    outline: none;
     box-shadow: 0 0 0 2px var(--gold), 0 0 0 6px hsl(var(--gold) / 0.35);
   }
 
-  /* Chat bubble entrance */
+  /* Enhanced chat bubble entrance */
   @keyframes chat-in {
     0% {
       opacity: 0;
-      transform: translateY(20px) skewY(2deg);
+      transform: translateY(10px) scale(0.96);
     }
     100% {
       opacity: 1;
-      transform: translateY(0) skewY(0deg);
+      transform: translateY(0) scale(1);
     }
   }
+
   .animate-chat-in {
-    animation: chat-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: chat-in 0.4s cubic-bezier(0.38, 0.1, 0.36, 0.9) both;
+  }
+
+  /* Gradient mask reveal for streaming */
+  @keyframes gradient-reveal {
+    0% {
+      background-position: -100% 0;
+    }
+    100% {
+      background-position: 100% 0;
+    }
+  }
+
+  .streaming-reveal {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--brand) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: gradient-reveal 1.5s ease-in-out infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   /* Reduced motion support */
   @media (prefers-reduced-motion: reduce) {
     .floating,
     .shimmer,
-    .animate-chat-in {
+    .animate-chat-in,
+    .streaming-reveal {
       animation: none;
+    }
+
+    .hover-lift:hover {
+      transform: none;
     }
   }
 
@@ -325,10 +435,11 @@
     overflow: hidden;
   }
 
-  /* Custom scrollbar styles */
+  /* Enhanced scrollbar styles */
   .scrollbar-visible {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground)) transparent;
+    scrollbar-color: color-mix(in oklab, var(--brand) 55%, transparent)
+      transparent;
   }
 
   .scrollbar-visible::-webkit-scrollbar {
@@ -341,37 +452,20 @@
   }
 
   .scrollbar-visible::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.3);
+    background: color-mix(in oklab, var(--brand) 55%, transparent);
     border-radius: 4px;
     border: 1px solid transparent;
     background-clip: content-box;
   }
 
   .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+    background: color-mix(in oklab, var(--brand) 70%, transparent);
     background-clip: content-box;
   }
 
   .scrollbar-visible::-webkit-scrollbar-thumb:active {
-    background: hsl(var(--muted-foreground) / 0.7);
+    background: color-mix(in oklab, var(--brand) 85%, transparent);
     background-clip: content-box;
-  }
-
-  /* Dark mode scrollbar adjustments */
-  .dark .scrollbar-visible {
-    scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
-  }
-
-  .dark .scrollbar-visible::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.4);
-  }
-
-  .dark .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.6);
-  }
-
-  .dark .scrollbar-visible::-webkit-scrollbar-thumb:active {
-    background: hsl(var(--muted-foreground) / 0.8);
   }
 
   /* Markdown and code highlighting adjustments */

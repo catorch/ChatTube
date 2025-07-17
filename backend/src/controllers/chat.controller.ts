@@ -397,8 +397,8 @@ async function getRelevantChunks(
         index: "vector_index",
         path: "embedding",
         queryVector: queryEmbedding,
-        numCandidates: 50,
-        limit: 5,
+        numCandidates: 500,
+        limit: 10,
       },
     };
 

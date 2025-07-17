@@ -171,6 +171,23 @@ export const chatApi = {
     return response.json();
   },
 
+  async updateChatTitle(
+    chatId: string,
+    title: string
+  ): Promise<{ status: string; chat: Chat }> {
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ title }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update chat title");
+    }
+
+    return response.json();
+  },
+
   async streamMessage(
     chatId: string,
     request: SendMessageRequest,

@@ -51,6 +51,21 @@ export function ChatPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamRef = useRef<{ close: () => void } | null>(null);
 
+  // Get user initials for display
+  const getUserInitials = () => {
+    if (!user) return "?";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user.firstName) {
+      return user.firstName[0].toUpperCase();
+    }
+    if (user.email) {
+      return user.email[0].toUpperCase();
+    }
+    return "?";
+  };
+
   const scrollToBottom = () => {
     // Use requestAnimationFrame to ensure DOM is updated before scrolling
     requestAnimationFrame(() => {
@@ -306,10 +321,10 @@ export function ChatPanel() {
                     {/* Enhanced ChatBubble with improved responsive sizing */}
                     <div
                       className={`p-4 shadow-[var(--elev-1)] break-words rounded-[var(--r-3)] transition-all duration-200 ${
-                        // Enhanced responsive max-width: 80% on ≥1024px, full width with padding on smaller
+                        // Responsive max-width: 80% on ≥1024px, 100% with insets on smaller screens
                         message.isUser
-                          ? "max-w-[85%] sm:max-w-[75%] lg:max-w-[80%] ml-auto"
-                          : "max-w-[90%] sm:max-w-[85%] lg:max-w-[80%]"
+                          ? "w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0 lg:ml-auto"
+                          : "w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0"
                       } ${
                         message.isUser ? "lux-gradient text-white" : "card-soft"
                       }`}
@@ -387,7 +402,9 @@ export function ChatPanel() {
 
                   {message.isUser && (
                     <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">Y</span>
+                      <span className="text-white text-sm font-medium">
+                        {getUserInitials()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -400,23 +417,8 @@ export function ChatPanel() {
                 <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
                   <Sparkles className="h-4 w-4 text-white animate-pulse relative z-10" />
                 </div>
-                <div className="card-soft p-4 rounded-[var(--r-3)]">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce" />
-                      <div
-                        className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      />
-                      <div
-                        className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground streaming-reveal">
-                      Thinking...
-                    </span>
-                  </div>
+                <div className="card-soft p-4 rounded-[var(--r-3)] w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0">
+                  <div className="streaming-reveal text-sm">Thinking...</div>
                 </div>
               </div>
             )}

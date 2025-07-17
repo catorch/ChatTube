@@ -221,7 +221,7 @@ export function MarkdownMessage({
         {content}
       </ReactMarkdown>
 
-      {/* Enhanced streaming indicator with proper ARIA attributes */}
+      {/* Enhanced streaming indicator with gradient reveal animation */}
       {isStreaming && (
         <div
           className="inline-flex items-center gap-2 mt-1"
@@ -229,7 +229,7 @@ export function MarkdownMessage({
           aria-live="polite"
           aria-label="Assistant is typing"
         >
-          <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
+          <span className="streaming-reveal text-sm">●</span>
           <span className="sr-only">Message is being generated</span>
         </div>
       )}

@@ -3,11 +3,12 @@ import Chat from "../models/Chat";
 import Message from "../models/Message";
 import Video from "../models/Video";
 import VideoChunk from "../models/VideoChunk";
-import OpenAI from "openai";
+import { createLLMClient, LLMMessage } from "../services/llm";
 import {
   formatTimestamp,
   createYouTubeTimestampUrl,
 } from "../utils/timestampUtils";
+import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -137,7 +138,7 @@ export async function getChatMessages(req: Request, res: Response) {
 // Send a message and get AI response
 export async function sendMessage(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { content, videoId } = req.body;
+  const { content, videoIds, provider } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -170,13 +171,14 @@ export async function sendMessage(req: Request, res: Response) {
     });
 
     // Get relevant video chunks for RAG using MongoDB Vector Search
-    const relevantChunks = await getRelevantChunks(content, videoId);
+    const relevantChunks = await getRelevantChunks(content, videoIds);
 
     // Generate AI response
     const aiResponse = await generateAIResponse(
       content,
       relevantChunks,
-      chatId
+      chatId,
+      provider
     );
 
     // Save AI message
@@ -186,7 +188,7 @@ export async function sendMessage(req: Request, res: Response) {
       content: aiResponse.content,
       metadata: {
         videoReferences: aiResponse.videoReferences,
-        model: "gpt-4",
+        model: aiResponse.model,
         tokenCount: aiResponse.tokenCount,
       },
       isVisible: true,
@@ -194,10 +196,17 @@ export async function sendMessage(req: Request, res: Response) {
 
     // Update chat activity and add video references
     const updateData: any = { lastActivity: new Date() };
-    if (videoId && !chat.videoIds.includes(videoId)) {
-      const video = await Video.findOne({ videoId });
-      if (video) {
-        updateData.$addToSet = { videoIds: video._id };
+    if (videoIds && videoIds.length > 0) {
+      const videos = await Video.find({ videoId: { $in: videoIds } });
+      const videoObjectIds = videos.map((v) => v._id);
+      const newVideoIds = videoObjectIds.filter(
+        (id) =>
+          !chat.videoIds.some(
+            (existingId) => existingId.toString() === (id as any).toString()
+          )
+      );
+      if (newVideoIds.length > 0) {
+        updateData.$addToSet = { videoIds: { $each: newVideoIds } };
       }
     }
     await Chat.findByIdAndUpdate(chatId, updateData);
@@ -214,6 +223,109 @@ export async function sendMessage(req: Request, res: Response) {
       message: "Failed to send message",
       error: error.message,
     });
+  }
+}
+
+// Stream AI response with real-time updates
+export async function streamMessage(req: Request, res: Response) {
+  const { chatId } = req.params;
+  const { content, videoIds, provider } = req.body;
+  const userId = res.locals.user?.id;
+
+  if (!userId) {
+    return res
+      .status(401)
+      .json({ status: "ERROR", message: "User not authenticated" });
+  }
+
+  if (!content) {
+    return res
+      .status(400)
+      .json({ status: "ERROR", message: "Message content is required" });
+  }
+
+  try {
+    // Verify chat belongs to user
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ status: "ERROR", message: "Chat not found" });
+    }
+
+    // Set up SSE headers
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Cache-Control",
+    });
+
+    // Save user message
+    const userMessage = await Message.create({
+      chatId,
+      role: "user",
+      content,
+      isVisible: true,
+    });
+
+    // Send user message event
+    res.write(
+      `data: ${JSON.stringify({
+        type: "user_message",
+        message: userMessage,
+      })}\n\n`
+    );
+
+    // Get relevant video chunks
+    const relevantChunks = await getRelevantChunks(content, videoIds);
+
+    // Send context event
+    res.write(
+      `data: ${JSON.stringify({
+        type: "context",
+        chunks: relevantChunks.length,
+      })}\n\n`
+    );
+
+    // Stream AI response
+    await streamAIResponse(
+      content,
+      relevantChunks,
+      chatId,
+      provider,
+      res,
+      userMessage._id
+    );
+
+    // Update chat activity
+    const updateData: any = { lastActivity: new Date() };
+    if (videoIds && videoIds.length > 0) {
+      const videos = await Video.find({ videoId: { $in: videoIds } });
+      const videoObjectIds = videos.map((v) => v._id);
+      const newVideoIds = videoObjectIds.filter(
+        (id) =>
+          !chat.videoIds.some(
+            (existingId) => existingId.toString() === (id as any).toString()
+          )
+      );
+      if (newVideoIds.length > 0) {
+        updateData.$addToSet = { videoIds: { $each: newVideoIds } };
+      }
+    }
+    await Chat.findByIdAndUpdate(chatId, updateData);
+
+    res.end();
+  } catch (error: any) {
+    console.error("Error streaming message:", error);
+    res.write(
+      `data: ${JSON.stringify({
+        type: "error",
+        message: "Failed to generate response",
+      })}\n\n`
+    );
+    res.end();
   }
 }
 
@@ -257,12 +369,12 @@ export async function deleteChat(req: Request, res: Response) {
 // Helper function to get relevant video chunks using MongoDB Vector Search
 async function getRelevantChunks(
   query: string,
-  videoId?: string
+  videoIds?: string[]
 ): Promise<any[]> {
   try {
-    // Generate embedding for the query
+    // Generate embedding for search query using OpenAI
     const embedding = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
+      model: "text-embedding-3-small",
       input: query,
     });
 
@@ -272,11 +384,11 @@ async function getRelevantChunks(
     const pipeline: any[] = [
       {
         $vectorSearch: {
-          index: "vector_index", // MongoDB Atlas Vector Search index
+          index: "vector_index",
           path: "embedding",
           queryVector: queryEmbedding,
           numCandidates: 50,
-          limit: 3, // Top 3 most relevant chunks
+          limit: 3,
         },
       },
       {
@@ -287,11 +399,12 @@ async function getRelevantChunks(
     ];
 
     // Add video filter if specified
-    if (videoId) {
-      const video = await Video.findOne({ videoId });
-      if (video) {
+    if (videoIds && videoIds.length > 0) {
+      const videos = await Video.find({ videoId: { $in: videoIds } });
+      const videoObjectIds = videos.map((v) => v._id);
+      if (videoObjectIds.length > 0) {
         pipeline.unshift({
-          $match: { videoId: video._id },
+          $match: { videoId: { $in: videoObjectIds } },
         });
       }
     }
@@ -308,6 +421,11 @@ async function getRelevantChunks(
       },
       {
         $unwind: "$video",
+      },
+      {
+        $project: {
+          embedding: 0, // Exclude embedding field from response
+        },
       }
     );
 
@@ -324,7 +442,8 @@ async function getRelevantChunks(
 async function generateAIResponse(
   userQuery: string,
   relevantChunks: any[],
-  chatId: string
+  chatId: string,
+  provider?: string
 ) {
   try {
     // Get recent chat history for context
@@ -376,22 +495,29 @@ Instructions:
 - Use the precise timestamps provided rather than approximate times
 - If asked about topics not covered in the context, suggest what additional videos might be helpful`;
 
-    const messages = [
+    const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },
       ...conversationHistory.slice(-8), // Keep last 8 messages for context
       { role: "user", content: userQuery },
     ];
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: messages as any,
-      max_tokens: 500,
-      temperature: 0.7,
-    });
+    // Use the moved LLM implementation
+    const llmClient = createLLMClient(provider as any);
+    let responseContent = "";
 
-    const content =
-      completion.choices[0]?.message?.content ||
-      "Sorry, I could not generate a response.";
+    await llmClient.streamChat(
+      messages,
+      (delta: string) => {
+        responseContent += delta;
+      },
+      {
+        temperature: 0.7,
+        // maxTokens: 500,
+        stream: false,
+      }
+    );
+
+    const content = responseContent;
 
     // Prepare video references with precise timestamps and confidence metrics
     const videoReferences = relevantChunks.map((chunk) => ({
@@ -414,7 +540,8 @@ Instructions:
     return {
       content,
       videoReferences,
-      tokenCount: completion.usage?.total_tokens || 0,
+      tokenCount: responseContent.length, // Estimate token count
+      model: provider || "openai",
     };
   } catch (error) {
     console.error("Error generating AI response:", error);
@@ -422,6 +549,161 @@ Instructions:
       content: "Sorry, I encountered an error while processing your request.",
       videoReferences: [],
       tokenCount: 0,
+      model: "unknown",
     };
+  }
+}
+
+// Helper function to stream AI response with real-time updates
+async function streamAIResponse(
+  userQuery: string,
+  relevantChunks: any[],
+  chatId: string,
+  provider: string = "openai",
+  res: Response,
+  userMessageId: any
+) {
+  try {
+    // Get recent chat history for context
+    const recentMessages = await Message.find({ chatId, isVisible: true })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    // Build context from relevant chunks
+    const context = relevantChunks
+      .map((chunk, index) => {
+        const timestampFormatted = formatTimestamp(chunk.startTime);
+        const youtubeUrl = createYouTubeTimestampUrl(
+          chunk.video.videoId,
+          chunk.startTime
+        );
+
+        return `[Segment ${index + 1}] From video "${chunk.video.title}" (${
+          chunk.video.channelName
+        }) at ${timestampFormatted} (${youtubeUrl}) - Relevance: ${(
+          chunk.score * 100
+        ).toFixed(1)}%${
+          chunk.noSpeechProb
+            ? ` - Confidence: ${((1 - chunk.noSpeechProb) * 100).toFixed(1)}%`
+            : ""
+        }: ${chunk.text}`;
+      })
+      .join("\n\n");
+
+    // Build conversation history
+    const conversationHistory = recentMessages.reverse().map((msg: any) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    // Create enhanced system prompt
+    const systemPrompt = `You are a helpful AI assistant that answers questions about YouTube videos using the provided context from video transcripts.
+
+Context from relevant video segments:
+${context}
+
+Instructions:
+- Answer the user's question based on the provided video context from precise Whisper transcription segments
+- Reference specific video titles and exact timestamps (HH:MM:SS format) when relevant
+- Include YouTube URLs with timestamps when citing specific moments
+- If the context doesn't contain sufficient information, acknowledge this limitation
+- Be concise but informative in your responses
+- When referencing multiple videos, distinguish between them clearly
+- Include relevance scores and transcription confidence when citing sources
+- Use the precise timestamps provided rather than approximate times
+- If asked about topics not covered in the context, suggest what additional videos might be helpful`;
+
+    const messages: LLMMessage[] = [
+      { role: "system", content: systemPrompt },
+      ...conversationHistory.slice(-8),
+      { role: "user", content: userQuery },
+    ];
+
+    // Create temporary AI message
+    const tempAiMessage = await Message.create({
+      chatId,
+      role: "assistant",
+      content: "",
+      isVisible: true,
+    });
+
+    // Send start event
+    res.write(
+      `data: ${JSON.stringify({
+        type: "start",
+        messageId: tempAiMessage._id,
+      })}\n\n`
+    );
+
+    // Use LLM client for streaming
+    const llmClient = createLLMClient(provider as any);
+    let fullContent = "";
+
+    await llmClient.streamChat(
+      messages,
+      (delta: string) => {
+        fullContent += delta;
+
+        // Send delta event
+        res.write(
+          `data: ${JSON.stringify({
+            type: "delta",
+            content: delta,
+            messageId: tempAiMessage._id,
+          })}\n\n`
+        );
+      },
+      {
+        temperature: 0.7,
+        stream: true,
+      }
+    );
+
+    // Prepare video references
+    const videoReferences = relevantChunks.map((chunk) => ({
+      videoId: chunk.video._id,
+      chunkIds: [chunk._id],
+      timestamps: [chunk.startTime],
+      timestampFormatted: formatTimestamp(chunk.startTime),
+      youtubeUrl: createYouTubeTimestampUrl(
+        chunk.video.videoId,
+        chunk.startTime
+      ),
+      relevanceScore: chunk.score,
+      confidenceMetrics: {
+        avgLogProb: chunk.avgLogProb,
+        noSpeechProb: chunk.noSpeechProb,
+        compressionRatio: chunk.compressionRatio,
+      },
+    }));
+
+    // Update message with final content and metadata
+    await Message.findByIdAndUpdate(tempAiMessage._id, {
+      content: fullContent,
+      metadata: {
+        videoReferences,
+        model: provider,
+        tokenCount: fullContent.length,
+      },
+    });
+
+    // Send completion event
+    res.write(
+      `data: ${JSON.stringify({
+        type: "complete",
+        messageId: tempAiMessage._id,
+        videoReferences,
+        model: provider,
+        tokenCount: fullContent.length,
+      })}\n\n`
+    );
+  } catch (error) {
+    console.error("Error streaming AI response:", error);
+    res.write(
+      `data: ${JSON.stringify({
+        type: "error",
+        message: "Failed to generate response",
+      })}\n\n`
+    );
   }
 }

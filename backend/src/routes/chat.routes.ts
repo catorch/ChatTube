@@ -19,6 +19,9 @@ chatRouter.get("/:chatId/messages", chatController.getChatMessages);
 // Send a message to a chat and get AI response
 chatRouter.post("/:chatId/messages", chatController.sendMessage);
 
+// Stream a message to a chat with real-time AI response
+chatRouter.post("/:chatId/stream", chatController.streamMessage);
+
 // Delete a chat
 chatRouter.delete("/:chatId", chatController.deleteChat);
 

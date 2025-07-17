@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { authApi } from "../../api/services/auth";
 import { User, LoginRequest, SignupRequest } from "../../api/types";
+import { resetStore } from "../../store";
 
 interface AuthState {
   user: User | null;
@@ -174,6 +175,11 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.error.message || "Logout failed";
       });
+
+    // Handle global store reset
+    builder.addCase(resetStore, () => {
+      return initialState;
+    });
 
     // Handle redux-persist REHYDRATE action (must come after all addCase calls)
     builder.addMatcher(

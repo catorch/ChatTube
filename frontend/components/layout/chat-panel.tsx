@@ -14,9 +14,9 @@ import {
 } from "@/lib/features/chat/chatSlice";
 import { chatApi } from "@/lib/api/services/chat";
 import { Button } from "@/components/ui/button";
-
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ChatBubble } from "@/components/ui/chat-bubble";
 import { MarkdownMessage } from "@/components/ui/markdown-message";
 import {
   Send,
@@ -128,6 +128,7 @@ export function ChatPanel() {
           provider: selectedProvider,
         },
         (event) => {
+          console.log("Stream event received:", event); // Debug log
           dispatch(handleStreamEvent(event));
 
           // Clean up when stream completes or errors
@@ -144,7 +145,8 @@ export function ChatPanel() {
       // Store stream controller locally for cleanup
       activeStreamRef.current = streamController;
 
-      dispatch(startStreaming({ messageId: "temp" }));
+      // Don't start streaming here - wait for the "start" event
+      // The streaming will be started when we receive the actual messageId from the server
     } catch (error) {
       console.error("Failed to send message:", error);
       setInputValue(content);
@@ -176,7 +178,7 @@ export function ChatPanel() {
       <div className="flex-1 flex flex-col h-full bg-background items-center justify-center">
         <div className="text-center py-12">
           <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
-            <MessageCircle className="h-8 w-8 text-white" />
+            <MessageCircle className="h-8 w-8 text-white relative z-10" />
           </div>
           <h3 className="text-lg font-semibold mb-2">Chat with Your Videos</h3>
           <p className="text-muted-foreground max-w-md mx-auto mb-4">
@@ -191,7 +193,7 @@ export function ChatPanel() {
   return (
     <div className="flex-1 flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-border bg-card/50">
+      <div className="shrink-0 p-4 sm:p-6 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2">
@@ -211,7 +213,7 @@ export function ChatPanel() {
             {/* LLM Provider Selector */}
             <div className="relative">
               <Button
-                variant="outline"
+                variant="surface"
                 size="sm"
                 onClick={() =>
                   setIsProviderDropdownOpen(!isProviderDropdownOpen)
@@ -223,7 +225,7 @@ export function ChatPanel() {
               </Button>
 
               {isProviderDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[100px]">
+                <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-[var(--r-2)] shadow-[var(--elev-2)] z-50 min-w-[100px]">
                   {(["openai", "anthropic", "google"] as const).map(
                     (provider) => (
                       <button
@@ -232,7 +234,7 @@ export function ChatPanel() {
                           dispatch(setSelectedProvider(provider));
                           setIsProviderDropdownOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2 text-xs capitalize hover:bg-accent first:rounded-t-lg last:rounded-b-lg ${
+                        className={`w-full text-left px-3 py-2 text-xs capitalize hover:bg-accent first:rounded-t-[var(--r-2)] last:rounded-b-[var(--r-2)] ${
                           selectedProvider === provider ? "bg-accent" : ""
                         }`}
                       >
@@ -258,23 +260,24 @@ export function ChatPanel() {
 
         {/* Error Display */}
         {error && (
-          <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-[var(--r-2)]">
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
       </div>
 
-      {/* Messages */}
+      {/* Messages - Enhanced with better sizing */}
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth scrollbar-visible"
         style={{ scrollbarGutter: "stable" }}
       >
         <div className="p-4 sm:p-6">
+          {/* Enhanced container with proper max-width handling */}
           <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
             {messages.length === 0 ? (
               <div className="text-center py-12">
                 <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
-                  <Sparkles className="h-8 w-8 text-white" />
+                  <Sparkles className="h-8 w-8 text-white relative z-10" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">
                   Welcome to ChatTube
@@ -295,21 +298,21 @@ export function ChatPanel() {
                 >
                   {!message.isUser && (
                     <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                      <Sparkles className="h-4 w-4 text-white" />
+                      <Sparkles className="h-4 w-4 text-white relative z-10" />
                     </div>
                   )}
 
-                  <div
-                    className={`max-w-[70%] ${
-                      message.isUser ? "order-first" : ""
-                    }`}
-                  >
+                  <div className={`${message.isUser ? "order-first" : ""}`}>
+                    {/* Enhanced ChatBubble with improved responsive sizing */}
                     <div
-                      className={`p-4 max-w-fit rounded-3xl shadow-[var(--elev-1)] animate-chat-in ${
+                      className={`p-4 shadow-[var(--elev-1)] break-words rounded-[var(--r-3)] transition-all duration-200 ${
+                        // Enhanced responsive max-width: 80% on ≥1024px, full width with padding on smaller
                         message.isUser
-                          ? "lux-gradient text-white ml-auto"
-                          : "card-soft"
-                      } break-words`}
+                          ? "max-w-[85%] sm:max-w-[75%] lg:max-w-[80%] ml-auto"
+                          : "max-w-[90%] sm:max-w-[85%] lg:max-w-[80%]"
+                      } ${
+                        message.isUser ? "lux-gradient text-white" : "card-soft"
+                      }`}
                     >
                       <MarkdownMessage
                         content={message.content}
@@ -324,7 +327,9 @@ export function ChatPanel() {
                         message.isUser ? "justify-end" : "justify-start"
                       }`}
                     >
-                      <span>{message.timestamp.toLocaleTimeString()}</span>
+                      <span>
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </span>
                       {message.sources && message.sources.length > 0 && (
                         <Badge variant="outline" className="text-xs">
                           {message.sources.length} sources
@@ -389,25 +394,26 @@ export function ChatPanel() {
               ))
             )}
 
+            {/* Enhanced loading indicator with gradient reveal */}
             {isLoading && (
-              <div className="flex gap-4 justify-start animate-chat-in">
+              <div className="flex gap-4 justify-start">
                 <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                  <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                  <Sparkles className="h-4 w-4 text-white animate-pulse relative z-10" />
                 </div>
-                <div className="card-soft p-4 rounded-3xl">
+                <div className="card-soft p-4 rounded-[var(--r-3)]">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce" />
                       <div
-                        className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                        className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce"
                         style={{ animationDelay: "0.1s" }}
                       />
                       <div
-                        className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce"
+                        className="w-2 h-2 bg-[var(--brand)] rounded-full animate-bounce"
                         style={{ animationDelay: "0.2s" }}
                       />
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground streaming-reveal">
                       Thinking...
                     </span>
                   </div>
@@ -420,8 +426,8 @@ export function ChatPanel() {
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 sm:p-6 border-t border-border bg-card/50">
+      {/* Enhanced Input Area with Dock Shadow */}
+      <div className="shrink-0 p-4 sm:p-6 border-t border-border bg-card/50 backdrop-blur-sm input-dock">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="relative">
             <textarea
@@ -430,7 +436,7 @@ export function ChatPanel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything about your sources..."
-              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none"
+              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-[var(--r-2)] focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200"
               rows={1}
               disabled={isLoading}
             />
@@ -457,7 +463,8 @@ export function ChatPanel() {
               <Button
                 type="submit"
                 size="sm"
-                className="h-8 w-8 p-0 lux-gradient"
+                variant="brand"
+                className="h-8 w-8 p-0"
                 disabled={!inputValue.trim() || isLoading}
               >
                 <Send className="h-4 w-4" />

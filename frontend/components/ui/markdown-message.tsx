@@ -45,7 +45,7 @@ export function MarkdownMessage({
           pre: ({ children, ...props }) => (
             <pre
               className={cn(
-                "bg-muted/50 border border-border rounded-lg p-3 my-2 overflow-x-auto text-xs",
+                "bg-muted/50 border border-border rounded-[var(--r-1)] p-3 my-2 overflow-x-auto text-xs",
                 isUser ? "bg-white/10 border-white/20" : ""
               )}
               {...props}
@@ -62,7 +62,7 @@ export function MarkdownMessage({
                 className={cn(
                   isInlineCode &&
                     cn(
-                      "bg-muted/50 border border-border rounded px-1 py-0.5 text-xs font-mono",
+                      "bg-muted/50 border border-border rounded-[var(--r-1)] px-1 py-0.5 text-xs font-mono",
                       isUser ? "bg-white/10 border-white/20" : ""
                     ),
                   className
@@ -152,7 +152,7 @@ export function MarkdownMessage({
           th: ({ children, ...props }) => (
             <th
               className={cn(
-                "border border-border px-2 py-1 bg-muted/30 font-medium text-left",
+                "border border-border px-2 py-1 text-left font-medium bg-muted/50",
                 isUser ? "border-white/20 bg-white/10" : ""
               )}
               {...props}
@@ -173,54 +173,23 @@ export function MarkdownMessage({
             </td>
           ),
 
-          // Links (with special handling for video references)
+          // Enhanced links with video reference detection
           a: ({ children, href, ...props }) => {
-            // Debug logging
-            console.log("Link detected:", { href, children, props });
-
-            // Check if this is a video reference
+            // Check if this is a video reference URL
             if (href && href.startsWith("video://")) {
               console.log("Video reference detected:", href);
               return (
-                <VideoReference href={href} isUser={isUser} className="mx-0.5">
+                <VideoReference href={href} isUser={isUser}>
                   {children}
                 </VideoReference>
               );
             }
 
-            // Fallback: Check if this looks like a video reference by content (📺 followed by number)
-            const childrenText =
-              typeof children === "string"
-                ? children
-                : Array.isArray(children)
-                ? children.join("")
-                : String(children);
-            const videoRefPattern = /^📺\s*\d+$/;
-            if (videoRefPattern.test(childrenText.trim())) {
-              console.log(
-                "Video reference detected by pattern:",
-                childrenText,
-                "href:",
-                href
-              );
-              // Since href might be stripped, show debug info
-              return (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium bg-red-100 text-red-800",
-                    "border border-red-200"
-                  )}
-                >
-                  {children} (href: {href || "undefined"})
-                </span>
-              );
-            }
-
-            // Regular link
+            // Regular link with enhanced accessibility
             return (
               <a
                 className={cn(
-                  "underline underline-offset-2 hover:no-underline",
+                  "underline underline-offset-2 hover:no-underline transition-colors duration-200",
                   isUser
                     ? "text-white hover:text-white/80"
                     : "text-primary hover:text-primary/80"
@@ -228,6 +197,8 @@ export function MarkdownMessage({
                 target="_blank"
                 rel="noopener noreferrer"
                 href={href}
+                // Enhanced accessibility
+                aria-label={`Open link: ${href} (opens in new tab)`}
                 {...props}
               >
                 {children}
@@ -250,8 +221,17 @@ export function MarkdownMessage({
         {content}
       </ReactMarkdown>
 
+      {/* Enhanced streaming indicator with proper ARIA attributes */}
       {isStreaming && (
-        <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
+        <div
+          className="inline-flex items-center gap-2 mt-1"
+          role="status"
+          aria-live="polite"
+          aria-label="Assistant is typing"
+        >
+          <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
+          <span className="sr-only">Message is being generated</span>
+        </div>
       )}
     </div>
   );

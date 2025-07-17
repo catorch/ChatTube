@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { videosApi } from "../../api/services/videos";
 import { mapVideosToSources } from "../../api/mappers";
+import { resetStore } from "../../store";
 
 export interface Source {
   id: string;
@@ -10,7 +11,7 @@ export interface Source {
   thumbnail?: string;
   description?: string;
   isSelected: boolean;
-  lastUpdated: Date;
+  lastUpdated: string;
   status: "active" | "processing" | "error" | "inactive";
 }
 
@@ -19,6 +20,7 @@ interface SourcesState {
   selectedSources: string[];
   isAllSelected: boolean;
   isLoading: boolean;
+  isPolling: boolean;
   error: string | null;
 }
 
@@ -45,11 +47,43 @@ export const addSourceFromUrl = createAsyncThunk(
   }
 );
 
+// New polling async thunk
+export const pollProcessingVideos = createAsyncThunk(
+  "sources/pollProcessingVideos",
+  async (_, { getState, dispatch }) => {
+    const state = getState() as any;
+    const processingSources = state.sources.sources.filter(
+      (source: Source) => source.status === "processing"
+    );
+
+    if (processingSources.length === 0) {
+      return null; // No processing videos to poll
+    }
+
+    // Fetch only processing videos to check their status
+    const response = await videosApi.getVideos({
+      status: "processing",
+      limit: 50,
+    });
+
+    // Also fetch completed videos to catch any that just finished
+    const completedResponse = await videosApi.getVideos({
+      status: "completed",
+      limit: 50,
+    });
+
+    // Combine and map all videos
+    const allVideos = [...response.videos, ...completedResponse.videos];
+    return mapVideosToSources(allVideos);
+  }
+);
+
 const initialState: SourcesState = {
   sources: [],
   selectedSources: [],
   isAllSelected: false,
   isLoading: false,
+  isPolling: false,
   error: null,
 };
 
@@ -62,6 +96,12 @@ const sourcesSlice = createSlice({
     },
     addSource: (state, action: PayloadAction<Source>) => {
       state.sources.push(action.payload);
+    },
+    updateSource: (state, action: PayloadAction<Source>) => {
+      const index = state.sources.findIndex((s) => s.id === action.payload.id);
+      if (index !== -1) {
+        state.sources[index] = action.payload;
+      }
     },
     removeSource: (state, action: PayloadAction<string>) => {
       state.sources = state.sources.filter(
@@ -109,6 +149,9 @@ const sourcesSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
+    setPolling: (state, action: PayloadAction<boolean>) => {
+      state.isPolling = action.payload;
+    },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
@@ -142,6 +185,38 @@ const sourcesSlice = createSlice({
       .addCase(addSourceFromUrl.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message || "Failed to add source";
+      })
+      // Poll processing videos
+      .addCase(pollProcessingVideos.pending, (state) => {
+        state.isPolling = true;
+      })
+      .addCase(pollProcessingVideos.fulfilled, (state, action) => {
+        state.isPolling = false;
+        if (action.payload) {
+          // Update existing sources with new status information
+          action.payload.forEach((updatedSource) => {
+            const existingIndex = state.sources.findIndex(
+              (s) => s.id === updatedSource.id
+            );
+            if (existingIndex !== -1) {
+              // Preserve selection state when updating
+              const wasSelected = state.sources[existingIndex].isSelected;
+              state.sources[existingIndex] = {
+                ...updatedSource,
+                isSelected: wasSelected,
+              };
+            }
+          });
+        }
+      })
+      .addCase(pollProcessingVideos.rejected, (state, action) => {
+        state.isPolling = false;
+        console.error("Polling failed:", action.error.message);
+        // Don't set error for polling failures to avoid UI disruption
+      })
+      // Handle global store reset
+      .addCase(resetStore, () => {
+        return initialState;
       });
   },
 });
@@ -149,10 +224,12 @@ const sourcesSlice = createSlice({
 export const {
   setSources,
   addSource,
+  updateSource,
   removeSource,
   toggleSourceSelection,
   toggleAllSources,
   setLoading,
+  setPolling,
   setError,
 } = sourcesSlice.actions;
 

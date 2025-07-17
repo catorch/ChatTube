@@ -1,45 +1,22 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, createAction } from "@reduxjs/toolkit";
 import { persistStore, persistReducer, createTransform } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import authReducer from "./features/auth/authSlice";
 import sourcesReducer from "./features/sources/sourcesSlice";
 import chatReducer from "./features/chat/chatSlice";
 
-// Transform to handle Date objects
+// Global reset action
+export const resetStore = createAction("global/resetStore");
+
+// Transform for redux-persist (all slices now use ISO strings, so no date conversion needed)
 const dateTransform = createTransform(
   // transform state on its way to being serialized and persisted
   (inboundState: any) => {
-    return inboundState; // JSON.stringify handles Dates automatically
+    return inboundState; // All data is already serializable
   },
   // transform state being rehydrated
   (outboundState: any) => {
-    // Convert ISO date strings back to Date objects
-    const convertDates = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj;
-
-      if (
-        typeof obj === "string" &&
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(obj)
-      ) {
-        return new Date(obj);
-      }
-
-      if (Array.isArray(obj)) {
-        return obj.map(convertDates);
-      }
-
-      if (typeof obj === "object") {
-        const converted: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-          converted[key] = convertDates(value);
-        }
-        return converted;
-      }
-
-      return obj;
-    };
-
-    return convertDates(outboundState);
+    return outboundState; // All data uses ISO strings, no conversion needed
   }
 );
 
@@ -96,22 +73,35 @@ export const store = configureStore({
         ignoredActions: [
           "persist/PERSIST",
           "persist/REHYDRATE",
-          "sources/fetchSources/fulfilled",
-          "sources/addSourceFromUrl/fulfilled",
           "chat/addMessage",
+          "global/resetStore",
         ],
-        // Ignore Date objects in state - these are handled by redux-persist transforms
-        ignoredPaths: [
-          "sources.sources", // Array of sources with lastUpdated dates
-          "chat.messages", // Array of messages with timestamp dates
-          "auth.user.createdAt", // User creation date
-          "auth.user.updatedAt", // User update date
-        ],
+        // All date fields now use ISO strings, so no ignored paths needed
+        ignoredPaths: [],
       },
     }),
 });
 
 export const persistor = persistStore(store);
+
+// Function to completely reset the store and clear persisted data
+export const clearStoreAndPersist = async () => {
+  // Dispatch the global reset action
+  store.dispatch(resetStore());
+
+  // Clear all persisted data
+  await persistor.purge();
+
+  // Clear localStorage manually as well for any remaining data
+  try {
+    await storage.removeItem("persist:chattube-root");
+    await storage.removeItem("persist:auth");
+    await storage.removeItem("persist:sources");
+    await storage.removeItem("persist:chat");
+  } catch (error) {
+    console.warn("Error clearing storage:", error);
+  }
+};
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

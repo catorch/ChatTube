@@ -12,14 +12,14 @@ export interface Video {
   title: string;
   description?: string;
   duration: number;
-  uploadDate: Date;
+  uploadDate: string;
   channelName: string;
   channelId: string;
   thumbnailUrl?: string;
   viewCount: number;
   processingStatus: "processing" | "completed" | "failed";
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface VideosResponse extends ApiResponse<Video[]> {
@@ -49,8 +49,8 @@ export interface User {
   email: string;
   firstName?: string;
   lastName?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LoginRequest {

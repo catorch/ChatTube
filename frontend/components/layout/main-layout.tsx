@@ -1,23 +1,124 @@
 "use client";
 
 import { useState } from "react";
-import { useAppDispatch } from "@/lib/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { logout } from "@/lib/features/auth/authSlice";
+import {
+  clearMessages,
+  setCurrentChatId,
+  setCurrentInput,
+  loadChatMessages,
+} from "@/lib/features/chat/chatSlice";
+import { clearStoreAndPersist } from "@/lib/store";
 import { SourcesPanel } from "./sources-panel";
 import { ChatPanel } from "./chat-panel";
+import { WelcomePage } from "@/components/welcome/welcome-page";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Settings, User, Menu, X } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Settings,
+  User,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  LogOut,
+  UserCircle,
+} from "lucide-react";
 import { UserInfo } from "@/components/auth/user-info";
 
 export function MainLayout() {
   const dispatch = useAppDispatch();
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
   const [isMobileSourcesOpen, setIsMobileSourcesOpen] = useState(false);
+  const [isSourcesPanelCollapsed, setIsSourcesPanelCollapsed] = useState(false);
+  const [currentView, setCurrentView] = useState<"welcome" | "chat">("welcome");
+
+  const handleCreateNewChat = () => {
+    // Clear current chat state to ensure a fresh chat
+    dispatch(clearMessages());
+    dispatch(setCurrentChatId(null));
+    dispatch(setCurrentInput(""));
+
+    // Switch to chat view - ChatPanel will create a new chat automatically
+    setCurrentView("chat");
+  };
+
+  const handleChatClick = async (chatId: string) => {
+    try {
+      // Load the specific chat and its messages
+      await dispatch(loadChatMessages(chatId)).unwrap();
+
+      // Switch to chat view
+      setCurrentView("chat");
+    } catch (error) {
+      console.error("Failed to load chat:", error);
+      // Still switch to chat view even if loading fails
+      setCurrentView("chat");
+    }
+  };
+
+  const handleRenameChat = (chatId: string, newTitle: string) => {
+    // Optional: Add any additional UI logic here
+  };
+
+  const handleDeleteChat = (chatId: string) => {
+    // Optional: Add any additional UI logic here
+  };
+
+  const handleLogout = async () => {
+    try {
+      // First call the logout API
+      await dispatch(logout()).unwrap();
+    } catch (error) {
+      // Even if logout API fails, we still want to clear local state
+      console.warn("Logout API failed, but clearing local state:", error);
+    } finally {
+      // Always clear the store and persisted data
+      await clearStoreAndPersist();
+    }
+  };
+
+  // Get user initials for display
+  const getUserInitials = () => {
+    if (!user) return "?";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user.firstName) {
+      return user.firstName[0].toUpperCase();
+    }
+    if (user.email) {
+      return user.email[0].toUpperCase();
+    }
+    return "?";
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return "Guest";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    if (user.firstName) {
+      return user.firstName;
+    }
+    return user.email;
+  };
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Top Bar */}
-      <div className="h-14 border-b border-border bg-card/50 flex items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-4">
+      {/* Sticky Glassmorphic Top Bar */}
+      <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/50 h-14 sm:h-14 flex items-center justify-between px-4 sm:px-6 transition-all duration-200">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
@@ -31,9 +132,19 @@ export function MainLayout() {
             )}
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {currentView === "chat" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCurrentView("welcome")}
+                className="h-8 w-8 p-0 mr-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
             <div className="w-8 h-8 sm:w-9 sm:h-9 lux-gradient rounded-xl shadow-[var(--elev-2)] flex items-center justify-center">
-              <span className="text-white font-bold text-xs sm:text-sm">
+              <span className="text-white font-bold text-xs sm:text-sm relative z-10">
                 CT
               </span>
             </div>
@@ -46,34 +157,106 @@ export function MainLayout() {
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Settings className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <User className="h-4 w-4" />
-          </Button>
+
+          {/* User Dropdown Menu */}
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 relative"
+                >
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium border border-primary/20">
+                    {getUserInitials()}
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {getUserDisplayName()}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer">
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <User className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Desktop Sources Panel */}
-        <div className="hidden sm:block">
-          <SourcesPanel />
+        <div className="hidden sm:block relative">
+          <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
+          {/* Collapse Toggle Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute top-4 -right-4 z-10 h-8 w-8 p-0 bg-card border border-border rounded-full shadow-md hover:shadow-lg"
+            onClick={() => setIsSourcesPanelCollapsed(!isSourcesPanelCollapsed)}
+            title={
+              isSourcesPanelCollapsed ? "Expand sources" : "Collapse sources"
+            }
+          >
+            {isSourcesPanelCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </Button>
         </div>
 
         {/* Mobile Sources Panel Overlay */}
         {isMobileSourcesOpen && (
           <>
             <div
-              className="fixed inset-0 bg-black/50 z-40 sm:hidden"
+              className="fixed inset-0 bg-black/50 z-40 sm:hidden backdrop-blur-sm"
               onClick={() => setIsMobileSourcesOpen(false)}
             />
             <div className="fixed left-0 top-14 bottom-0 w-80 z-50 sm:hidden">
-              <SourcesPanel />
+              <SourcesPanel isCollapsed={false} />
             </div>
           </>
         )}
 
         <div className="flex-1 flex flex-col">
-          <ChatPanel />
+          {currentView === "welcome" ? (
+            <WelcomePage
+              onCreateNewChat={handleCreateNewChat}
+              onChatClick={handleChatClick}
+              onRenameChat={handleRenameChat}
+              onDeleteChat={handleDeleteChat}
+            />
+          ) : (
+            <ChatPanel />
+          )}
         </div>
       </div>
     </div>

@@ -16,47 +16,56 @@ export function VideoReference({
   className,
   isUser = false,
 }: VideoReferenceProps) {
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-
-    // Parse the video:// URL
+  // Parse the video:// URL to extract info
+  const parseVideoRef = () => {
     const match = href.match(/^video:\/\/([^\/]+)\/(\d+)$/);
     if (!match) {
       console.error("Invalid video reference format:", href);
-      return;
+      return null;
     }
-
-    const [, videoId, timestamp] = match;
-    const timestampNum = parseInt(timestamp, 10);
-
-    // Format timestamp for display
-    const formatTime = (seconds: number) => {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = seconds % 60;
-
-      if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
-          .toString()
-          .padStart(2, "0")}`;
-      } else {
-        return `${minutes}:${secs.toString().padStart(2, "0")}`;
-      }
+    return {
+      videoId: match[1],
+      timestamp: parseInt(match[2], 10),
     };
+  };
 
-    // Create YouTube URL with timestamp
-    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}&t=${timestampNum}s`;
+  const videoInfo = parseVideoRef();
 
-    // Show confirmation dialog with details
-    const timeFormatted = formatTime(timestampNum);
-    const confirmed = window.confirm(
-      `Open video at ${timeFormatted}?\n\nThis will open YouTube in a new tab.`
-    );
+  // Format timestamp for display
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
 
-    if (confirmed) {
-      window.open(youtubeUrl, "_blank", "noopener,noreferrer");
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
+        .toString()
+        .padStart(2, "0")}`;
+    } else {
+      return `${minutes}:${secs.toString().padStart(2, "0")}`;
     }
   };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    if (!videoInfo) return;
+
+    // Create YouTube URL with timestamp
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoInfo.videoId}&t=${videoInfo.timestamp}s`;
+
+    // Open directly without confirmation for smoother UX
+    window.open(youtubeUrl, "_blank", "noopener,noreferrer");
+  };
+
+  if (!videoInfo) {
+    // Fallback for invalid video references
+    return (
+      <span className="text-red-500 text-sm">[Invalid video reference]</span>
+    );
+  }
+
+  const timeFormatted = formatTime(videoInfo.timestamp);
 
   return (
     <button
@@ -75,10 +84,13 @@ export function VideoReference({
 
         className
       )}
-      title="Click to open video at this timestamp"
+      title={`Click to open video at ${timeFormatted} - Opens YouTube in new tab`}
     >
       <Play className="h-3 w-3 flex-shrink-0" />
-      <span>{children}</span>
+      <span className="flex items-center gap-1">
+        <span>{children}</span>
+        <span className="opacity-75 font-mono text-xs">({timeFormatted})</span>
+      </span>
       <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" />
     </button>
   );

@@ -31,7 +31,7 @@ export function mapVideoToSource(video: Video): Source {
       video.description ||
       `${video.channelName} • ${formatDuration(video.duration)}`,
     isSelected: false,
-    lastUpdated: new Date(video.updatedAt),
+    lastUpdated: video.updatedAt,
     status,
   };
 }

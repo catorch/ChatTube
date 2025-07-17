@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import Chat from "../models/Chat";
 import Message from "../models/Message";
 import Video from "../models/Video";
@@ -381,17 +382,7 @@ async function getRelevantChunks(
 
     const queryEmbedding = embedding.data[0].embedding;
 
-    // Build filter object for video filtering
-    let filter: any = {};
-    if (videoIds && videoIds.length > 0) {
-      const videos = await Video.find({ videoId: { $in: videoIds } });
-      const videoObjectIds = videos.map((v) => v._id);
-      if (videoObjectIds.length > 0) {
-        filter.videoId = { $in: videoObjectIds };
-      }
-    }
-
-    // Build aggregation pipeline for vector search with filter
+    // Build aggregation pipeline for vector search with conditional filter
     const vectorSearchStage: any = {
       $vectorSearch: {
         index: "vector_index",
@@ -402,9 +393,13 @@ async function getRelevantChunks(
       },
     };
 
-    // Add filter if we have video constraints
-    if (Object.keys(filter).length > 0) {
-      vectorSearchStage.$vectorSearch.filter = filter;
+    // Only add video filter if videoIds array has content
+    if (videoIds && videoIds.length > 0) {
+      // Convert string IDs to ObjectIds
+      const objectIds = videoIds.map((id) => new mongoose.Types.ObjectId(id));
+      vectorSearchStage.$vectorSearch.filter = {
+        videoId: { $in: objectIds },
+      };
     }
 
     const pipeline: any[] = [
@@ -438,6 +433,7 @@ async function getRelevantChunks(
 
     // Execute vector search
     const chunks = await VideoChunk.aggregate(pipeline);
+
     return chunks;
   } catch (error) {
     console.error("Error getting relevant chunks:", error);

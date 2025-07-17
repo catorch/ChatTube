@@ -317,14 +317,18 @@ export function ChatPanel() {
                     </div>
                   )}
 
-                  <div className={`${message.isUser ? "order-first" : ""}`}>
+                  <div
+                    className={`${
+                      message.isUser ? "order-first" : ""
+                    } flex-1 min-w-0`}
+                  >
                     {/* Enhanced ChatBubble with improved responsive sizing */}
                     <div
                       className={`p-4 shadow-[var(--elev-1)] break-words rounded-[var(--r-3)] transition-all duration-200 ${
-                        // Responsive max-width: 80% on ≥1024px, 100% with insets on smaller screens
+                        // Responsive max-width: 80% on ≥1024px, content-hugging width
                         message.isUser
-                          ? "w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0 lg:ml-auto"
-                          : "w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0"
+                          ? "w-fit max-w-full lg:max-w-[80%] mx-4 sm:mx-6 lg:mx-0 lg:ml-auto"
+                          : "w-fit max-w-full lg:max-w-[80%] mx-4 sm:mx-6 lg:mx-0"
                       } ${
                         message.isUser ? "lux-gradient text-white" : "card-soft"
                       }`}
@@ -438,7 +442,7 @@ export function ChatPanel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything about your sources..."
-              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-[var(--r-2)] focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200"
+              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-[var(--r-2)] focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 hide-scrollbar"
               rows={1}
               disabled={isLoading}
             />

@@ -109,18 +109,20 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
 
   return (
     <div
-      className={`flex flex-col h-full bg-card border-r border-border transition-all duration-300 ${
+      className={`flex flex-col h-full bg-surface-1 border-r border-border transition-all duration-300 ${
         isCollapsed ? "w-16" : "w-80"
       }`}
     >
       {!isCollapsed && (
         <>
-          {/* Static Header - No scrolling */}
+          {/* Enhanced Header with Better Typography */}
           <div className="shrink-0 border-b border-border">
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-semibold text-lg">Sources</h2>
+                  <h2 className="font-semibold text-lg text-foreground">
+                    Sources
+                  </h2>
                   {processingCount > 0 && (
                     <div className="flex items-center gap-1">
                       <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
@@ -157,7 +159,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
                   isFiltersExpanded ? "block" : "hidden sm:block"
                 }`}
               >
-                {/* Search */}
+                {/* Enhanced Search */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
@@ -165,15 +167,15 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
                     placeholder="Search sources..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-[var(--r-1)] focus:outline-none focus-lux text-sm"
+                    className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus-lux text-sm transition-all duration-300"
                   />
                 </div>
 
-                {/* Action Buttons */}
+                {/* Enhanced Action Buttons */}
                 <div className="flex gap-2">
                   <Button
                     variant="brand"
-                    className="flex-1 text-sm"
+                    className="flex-1 text-sm lux-gradient text-white font-medium"
                     onClick={() => setIsAddModalOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-1 sm:mr-2" />
@@ -193,14 +195,14 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
               </div>
             </div>
 
-            {/* Select All - Always visible */}
+            {/* Enhanced Select All */}
             <div className="p-4 border-t border-border">
               <button
                 onClick={handleSelectAll}
-                className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                className="flex items-center gap-2 text-sm hover:text-primary transition-colors font-medium"
               >
                 {isAllSelected ? (
-                  <CheckSquare className="h-4 w-4" />
+                  <CheckSquare className="h-4 w-4 text-primary" />
                 ) : (
                   <Square className="h-4 w-4" />
                 )}
@@ -209,86 +211,126 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
             </div>
           </div>
 
-          {/* Scrollable Sources List */}
+          {/* Enhanced Scrollable Sources List - Rich Source Cards */}
           <div className="flex-1 overflow-hidden">
             <div className="h-full overflow-y-auto scrollbar-visible">
-              <div className="p-4 space-y-2">
+              <div className="p-4 space-y-3">
                 {filteredSources.map((source) => (
                   <div
                     key={source.id}
-                    className={`group relative px-3 py-2.5 rounded-[var(--r-1)] transition-all cursor-pointer hover:bg-muted/40 ${
-                      source.isSelected
-                        ? "bg-primary/8 ring-1 ring-primary/20"
-                        : "hover:ring-1 hover:ring-border"
-                    }`}
+                    className={`
+                      p-3 rounded-lg border transition-all duration-200 cursor-pointer hover-lift
+                      ${
+                        source.isSelected
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:bg-muted/40 hover:border-border/80"
+                      }
+                    `}
                     onClick={() => handleSourceToggle(source.id)}
                   >
-                    <div className="flex items-center gap-3">
-                      {/* Icon - subtle */}
-                      <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted/60 flex items-center justify-center">
+                    {/* Header Row: Title and Selection Checkbox */}
+                    <div className="flex justify-between items-start gap-3 mb-2">
+                      <h3 className="font-semibold text-foreground leading-snug line-clamp-2 flex-1">
+                        {source.name}
+                      </h3>
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        {getStatusIcon(source.status)}
+                        {source.isSelected ? (
+                          <CheckSquare className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Square className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Author/Channel Line */}
+                    {(source as any).channelName && (
+                      <p className="text-xs text-muted-foreground mb-2">
+                        By {(source as any).channelName}
+                      </p>
+                    )}
+
+                    {/* Description */}
+                    {source.description && (
+                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+                        {source.description}
+                      </p>
+                    )}
+
+                    {/* Metadata Row */}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
                         {getSourceIcon(source.type)}
+                        <span className="capitalize">{source.type}</span>
                       </div>
-
-                      {/* Content - streamlined */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-medium text-sm line-clamp-1 text-foreground">
-                            {source.name}
-                          </h3>
-                          
-                          {/* Status indicator - minimal */}
-                          <div className="flex items-center gap-1.5">
-                            {getStatusIcon(source.status)}
-                            {source.isSelected && (
-                              <CheckSquare className="h-3.5 w-3.5 text-primary" />
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Meta info - condensed */}
-                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
-                          <span className="capitalize">{source.type}</span>
+                      <span>•</span>
+                      <span>
+                        {new Date(source.lastUpdated).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                          }
+                        )}
+                      </span>
+                      {source.status !== "active" && (
+                        <>
                           <span>•</span>
-                          <span>{new Date(source.lastUpdated).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                          {source.status !== "active" && (
-                            <>
-                              <span>•</span>
-                              <span className={`${
-                                source.status === "processing" ? "text-blue-500" :
-                                source.status === "error" ? "text-red-500" : "text-gray-500"
-                              }`}>
-                                {getStatusText(source.status)}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                          <span
+                            className={`font-medium ${
+                              source.status === "processing"
+                                ? "text-blue-500"
+                                : source.status === "error"
+                                ? "text-red-500"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {getStatusText(source.status)}
+                          </span>
+                        </>
+                      )}
+                    </div>
 
-                      {/* Actions - minimal */}
-                      <div className="flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle more options
-                          }}
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </div>
+                    {/* Optional Actions Menu */}
+                    <div className="absolute top-3 right-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Handle more options
+                        }}
+                      >
+                        <MoreVertical className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 ))}
 
                 {filteredSources.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {searchQuery
-                      ? "No sources match your search"
-                      : sources.length === 0
-                      ? "No sources added yet"
-                      : "No sources match your search"}
+                  <div className="text-center py-12 text-muted-foreground">
+                    <div className="w-12 h-12 mx-auto mb-4 bg-muted/20 rounded-lg flex items-center justify-center">
+                      <Search className="h-6 w-6" />
+                    </div>
+                    <p className="text-sm">
+                      {searchQuery
+                        ? "No sources match your search"
+                        : sources.length === 0
+                        ? "No sources added yet"
+                        : "No sources match your search"}
+                    </p>
+                    {!searchQuery && sources.length === 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => setIsAddModalOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add your first source
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

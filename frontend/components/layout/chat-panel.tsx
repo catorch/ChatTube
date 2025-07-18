@@ -31,6 +31,87 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+const AIAvatar = () => (
+  <div className="flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-primary/10">
+    <Sparkles className="h-5 w-5 text-white relative z-10" />
+  </div>
+);
+
+const UserAvatar = ({ initials }: { initials: string }) => (
+  <div className="flex-shrink-0 w-10 h-10 bg-muted/20 border border-border/50 rounded-full flex items-center justify-center text-sm font-medium text-foreground">
+    {initials}
+  </div>
+);
+
+interface MessageGroup {
+  isUser: boolean;
+  messages: any[];
+}
+
+const groupMessages = (messages: any[]): MessageGroup[] => {
+  if (messages.length === 0) return [];
+
+  const groups: MessageGroup[] = [];
+  let currentGroup: MessageGroup = {
+    isUser: messages[0].isUser,
+    messages: [messages[0]],
+  };
+
+  for (let i = 1; i < messages.length; i++) {
+    const currentMessage = messages[i];
+    if (currentMessage.isUser === currentGroup.isUser) {
+      // Same sender, add to current group
+      currentGroup.messages.push(currentMessage);
+    } else {
+      // Different sender, start new group
+      groups.push(currentGroup);
+      currentGroup = {
+        isUser: currentMessage.isUser,
+        messages: [currentMessage],
+      };
+    }
+  }
+
+  // Don't forget the last group
+  groups.push(currentGroup);
+  return groups;
+};
+
+const getMessageRadius = (
+  position: "first" | "middle" | "last" | "single",
+  isUser: boolean
+) => {
+  const baseRadius = "rounded-xl";
+
+  if (position === "single") return baseRadius;
+
+  if (isUser) {
+    // User messages (right side)
+    switch (position) {
+      case "first":
+        return "rounded-xl rounded-br-md";
+      case "middle":
+        return "rounded-xl rounded-br-md rounded-tr-md";
+      case "last":
+        return "rounded-xl rounded-tr-md";
+      default:
+        return baseRadius;
+    }
+  } else {
+    // AI messages (left side)
+    switch (position) {
+      case "first":
+        return "rounded-xl rounded-bl-md";
+      case "middle":
+        return "rounded-xl rounded-bl-md rounded-tl-md";
+      case "last":
+        return "rounded-xl rounded-tl-md";
+      default:
+        return baseRadius;
+    }
+  }
+};
+
 export function ChatPanel() {
   const dispatch = useAppDispatch();
   const {
@@ -187,6 +268,28 @@ export function ChatPanel() {
     adjustTextareaHeight();
   }, [inputValue]);
 
+  const copyMessage = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy message:", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = content;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    }
+  };
+
+  // Group messages for rendering
+  const messageGroups = groupMessages(messages);
+
   // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
@@ -206,41 +309,38 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="shrink-0 p-4 sm:p-6 border-b border-border bg-card/50 backdrop-blur-sm">
+    <div className="flex-1 flex flex-col h-full bg-background relative">
+      {/* Enhanced Header with Context */}
+      <div className="shrink-0 p-4 sm:p-6 border-b border-border bg-surface-1/80 backdrop-blur-sm">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">
-                ChatTube
-              </h1>
-            </div>
-            <Badge
-              variant="secondary"
-              className="text-xs hidden xs:inline-flex"
-            >
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+            <span className="text-sm text-muted-foreground">
               {selectedSources.length} sources selected
-            </Badge>
+            </span>
+            {selectedSources.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                Ready for analysis
+              </Badge>
+            )}
           </div>
+
           <div className="flex items-center gap-2">
-            {/* LLM Provider Selector */}
             <div className="relative">
               <Button
-                variant="surface"
+                variant="ghost"
                 size="sm"
+                className="gap-2 text-xs capitalize"
                 onClick={() =>
                   setIsProviderDropdownOpen(!isProviderDropdownOpen)
                 }
-                className="text-xs capitalize"
               >
                 {selectedProvider}
-                <ChevronDown className="h-3 w-3 ml-1" />
+                <ChevronDown className="h-3 w-3" />
               </Button>
 
               {isProviderDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-[var(--r-2)] shadow-[var(--elev-2)] z-50 min-w-[100px]">
+                <div className="absolute top-full right-0 mt-1 bg-background border border-border rounded-[var(--r-2)] shadow-[var(--elev-2)] z-10 min-w-24">
                   {(["openai", "anthropic", "google"] as const).map(
                     (provider) => (
                       <button
@@ -281,147 +381,148 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Messages - Enhanced with better sizing */}
+      {/* Enhanced Messages with Grouping */}
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth scrollbar-visible"
         style={{ scrollbarGutter: "stable" }}
       >
         <div className="p-4 sm:p-6">
-          {/* Enhanced container with proper max-width handling */}
-          <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
-            {messages.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
-                  <Sparkles className="h-8 w-8 text-white relative z-10" />
+          <div className="max-w-4xl mx-auto space-y-6">
+            {messageGroups.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="inline-flex items-center justify-center w-20 h-20 lux-gradient rounded-full mb-6 shadow-[var(--elev-2)] floating">
+                  <Sparkles className="h-10 w-10 text-white relative z-10" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">
+                <h3 className="text-xl font-semibold mb-4 text-foreground">
                   Welcome to ChatTube
                 </h3>
-                <p className="text-muted-foreground max-w-md mx-auto">
+                <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto">
                   Start a conversation by asking questions about your selected
                   sources. I&apos;ll help you explore and understand your
-                  content.
+                  content with intelligent AI analysis.
                 </p>
+                {selectedSources.length > 0 && (
+                  <div className="mt-6">
+                    <Badge
+                      variant="outline"
+                      className="bg-primary/5 border-primary/20 text-primary"
+                    >
+                      {selectedSources.length} sources ready for analysis
+                    </Badge>
+                  </div>
+                )}
               </div>
             ) : (
-              messages.map((message) => (
+              messageGroups.map((group, groupIndex) => (
                 <div
-                  key={message.id}
+                  key={`group-${groupIndex}`}
                   className={`flex gap-4 ${
-                    message.isUser ? "justify-end" : "justify-start"
+                    group.isUser ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {!message.isUser && (
-                    <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                      <Sparkles className="h-4 w-4 text-white relative z-10" />
-                    </div>
-                  )}
+                  {/* Avatar - only shown for first message in group */}
+                  {!group.isUser && <AIAvatar />}
 
+                  {/* Message Stack */}
                   <div
-                    className={`${
-                      message.isUser ? "order-first" : ""
-                    } flex-1 min-w-0`}
+                    className={`flex flex-col gap-1 ${
+                      group.isUser ? "items-end" : "items-start"
+                    } flex-1 min-w-0 max-w-[80%]`}
                   >
-                    {/* Enhanced ChatBubble with improved responsive sizing */}
-                    <div
-                      className={`p-4 shadow-[var(--elev-1)] break-words rounded-[var(--r-3)] transition-all duration-200 ${
-                        // Responsive max-width: 80% on ≥1024px, content-hugging width
-                        message.isUser
-                          ? "w-fit max-w-full lg:max-w-[80%] mx-4 sm:mx-6 lg:mx-0 lg:ml-auto"
-                          : "w-fit max-w-full lg:max-w-[80%] mx-4 sm:mx-6 lg:mx-0"
-                      } ${
-                        message.isUser ? "lux-gradient text-white" : "card-soft"
-                      }`}
-                    >
-                      <MarkdownMessage
-                        content={message.content}
-                        isUser={message.isUser}
-                        isStreaming={message.isStreaming}
-                        className={message.isUser ? "text-white" : ""}
-                      />
-                    </div>
+                    {group.messages.map((message, messageIndex) => {
+                      const isFirst = messageIndex === 0;
+                      const isLast = messageIndex === group.messages.length - 1;
+                      const position =
+                        group.messages.length === 1
+                          ? "single"
+                          : isFirst
+                          ? "first"
+                          : isLast
+                          ? "last"
+                          : "middle";
 
-                    <div
-                      className={`flex items-center gap-2 mt-2 text-xs text-muted-foreground ${
-                        message.isUser ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <span>
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </span>
-                      {message.sources && message.sources.length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          {message.sources.length} sources
-                        </Badge>
-                      )}
-                      {!message.isUser && (
-                        <div className="flex items-center gap-1 ml-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 cursor-pointer"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(
-                                  message.content
-                                );
-                                setCopiedMessageId(message.id);
-                                console.log("Message copied to clipboard");
-                                // Reset the check mark after 2 seconds
-                                setTimeout(() => {
-                                  setCopiedMessageId(null);
-                                }, 2000);
-                              } catch (err) {
-                                console.error("Failed to copy message:", err);
-                                // Fallback for older browsers
-                                const textArea =
-                                  document.createElement("textarea");
-                                textArea.value = message.content;
-                                document.body.appendChild(textArea);
-                                textArea.select();
-                                document.execCommand("copy");
-                                document.body.removeChild(textArea);
-                                setCopiedMessageId(message.id);
-                                setTimeout(() => {
-                                  setCopiedMessageId(null);
-                                }, 2000);
+                      return (
+                        <div key={message.id} className="w-full">
+                          {/* Message Bubble */}
+                          <div
+                            className={`
+                              p-4 break-words transition-all duration-200 ${getMessageRadius(
+                                position,
+                                group.isUser
+                              )}
+                              ${
+                                group.isUser
+                                  ? "lux-gradient text-white shadow-lg ml-auto max-w-fit"
+                                  : "card-soft shadow-[var(--elev-1)] max-w-fit"
                               }
-                            }}
-                            title={
-                              copiedMessageId === message.id
-                                ? "Copied!"
-                                : "Copy message"
-                            }
+                            `}
                           >
-                            {copiedMessageId === message.id ? (
-                              <Check className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
+                            <MarkdownMessage
+                              content={message.content}
+                              isUser={message.isUser}
+                              isStreaming={message.isStreaming}
+                              className={message.isUser ? "text-white" : ""}
+                            />
+                          </div>
+
+                          {/* Message Metadata */}
+                          <div
+                            className={`flex items-center gap-2 mt-1 text-xs text-muted-foreground ${
+                              group.isUser ? "justify-end" : "justify-start"
+                            }`}
+                          >
+                            <span>
+                              {new Date(message.timestamp).toLocaleTimeString(
+                                [],
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                            {message.sources && message.sources.length > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {message.sources.length} sources
+                              </Badge>
                             )}
-                          </Button>
+                            {!message.isUser && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0 hover:bg-primary/10"
+                                onClick={() =>
+                                  copyMessage(message.id, message.content)
+                                }
+                                title={
+                                  copiedMessageId === message.id
+                                    ? "Copied!"
+                                    : "Copy message"
+                                }
+                              >
+                                {copiedMessageId === message.id ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
 
-                  {message.isUser && (
-                    <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {getUserInitials()}
-                      </span>
-                    </div>
-                  )}
+                  {/* User Avatar - positioned after messages */}
+                  {group.isUser && <UserAvatar initials={getUserInitials()} />}
                 </div>
               ))
             )}
 
-            {/* Enhanced loading indicator with gradient reveal */}
+            {/* Enhanced Thinking Indicator */}
             {isLoading && (
               <div className="flex gap-4 justify-start">
-                <div className="flex-shrink-0 w-8 h-8 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)]">
-                  <Sparkles className="h-4 w-4 text-white animate-pulse relative z-10" />
-                </div>
-                <div className="card-soft p-4 rounded-[var(--r-3)] w-full max-w-none mx-4 sm:mx-6 lg:max-w-[80%] lg:mx-0">
+                <AIAvatar />
+                <div className="card-soft p-4 rounded-xl rounded-tl-md shadow-[var(--elev-1)] max-w-fit">
                   <div className="streaming-reveal text-sm">Thinking...</div>
                 </div>
               </div>
@@ -432,8 +533,8 @@ export function ChatPanel() {
         </div>
       </div>
 
-      {/* Enhanced Input Area with Dock Shadow */}
-      <div className="shrink-0 p-4 sm:p-6 border-t border-border bg-card/50 backdrop-blur-sm input-dock">
+      {/* Enhanced Input Area with Premium Dock Styling */}
+      <div className="shrink-0 p-4 sm:p-6 border-t border-border bg-surface-1/80 backdrop-blur-sm input-dock">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="relative">
             <textarea
@@ -442,7 +543,7 @@ export function ChatPanel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything about your sources..."
-              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-[var(--r-2)] focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 hide-scrollbar"
+              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 hide-scrollbar"
               rows={1}
               disabled={isLoading}
             />
@@ -470,7 +571,7 @@ export function ChatPanel() {
                 type="submit"
                 size="sm"
                 variant="brand"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 lux-gradient text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={!inputValue.trim() || isLoading}
               >
                 <Send className="h-4 w-4" />

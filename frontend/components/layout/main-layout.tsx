@@ -116,21 +116,23 @@ export function MainLayout() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Sticky Glassmorphic Top Bar */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/50 h-14 sm:h-14 flex items-center justify-between px-4 sm:px-6 transition-all duration-200">
+      {/* Enhanced Glassmorphic Top Bar */}
+      <header className="sticky top-0 z-30 glass-effect h-14 sm:h-14 flex items-center justify-between px-4 sm:px-6 transition-all duration-200">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="sm:hidden h-8 w-8 p-0"
-            onClick={() => setIsMobileSourcesOpen(!isMobileSourcesOpen)}
-          >
-            {isMobileSourcesOpen ? (
-              <X className="h-4 w-4" />
-            ) : (
-              <Menu className="h-4 w-4" />
-            )}
-          </Button>
+          {currentView === "chat" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="sm:hidden h-8 w-8 p-0"
+              onClick={() => setIsMobileSourcesOpen(!isMobileSourcesOpen)}
+            >
+              {isMobileSourcesOpen ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Menu className="h-4 w-4" />
+              )}
+            </Button>
+          )}
 
           <div className="flex items-center gap-3">
             {currentView === "chat" && (
@@ -212,29 +214,33 @@ export function MainLayout() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Desktop Sources Panel */}
-        <div className="hidden sm:block relative">
-          <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
-          {/* Collapse Toggle Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute top-4 -right-4 z-10 h-8 w-8 p-0 bg-card border border-border rounded-full shadow-md hover:shadow-lg"
-            onClick={() => setIsSourcesPanelCollapsed(!isSourcesPanelCollapsed)}
-            title={
-              isSourcesPanelCollapsed ? "Expand sources" : "Collapse sources"
-            }
-          >
-            {isSourcesPanelCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        {/* Desktop Sources Panel - Hidden on welcome page */}
+        {currentView === "chat" && (
+          <div className="hidden sm:block relative">
+            <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
+            {/* Collapse Toggle Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute top-4 -right-4 z-10 h-8 w-8 p-0 bg-card border border-border rounded-full shadow-md hover:shadow-lg"
+              onClick={() =>
+                setIsSourcesPanelCollapsed(!isSourcesPanelCollapsed)
+              }
+              title={
+                isSourcesPanelCollapsed ? "Expand sources" : "Collapse sources"
+              }
+            >
+              {isSourcesPanelCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        )}
 
-        {/* Mobile Sources Panel Overlay */}
-        {isMobileSourcesOpen && (
+        {/* Mobile Sources Panel Overlay - Hidden on welcome page */}
+        {currentView === "chat" && isMobileSourcesOpen && (
           <>
             <div
               className="fixed inset-0 bg-black/50 z-40 sm:hidden backdrop-blur-sm"

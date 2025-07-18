@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Chat from "../models/Chat";
 import Message from "../models/Message";
-import Video from "../models/Video";
-import VideoChunk from "../models/VideoChunk";
+import Source from "../models/Source";
+import SourceChunk from "../models/SourceChunk";
 import { createLLMClient, LLMMessage } from "../services/llm";
 import {
   formatTimestamp,
@@ -17,7 +17,7 @@ const openai = new OpenAI({
 
 // Create a new chat session
 export async function createChat(req: Request, res: Response) {
-  const { title, videoId } = req.body;
+  const { title } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -27,27 +27,16 @@ export async function createChat(req: Request, res: Response) {
   }
 
   try {
-    let videoObjectId;
-    if (videoId) {
-      const video = await Video.findOne({ videoId });
-      if (!video) {
-        return res
-          .status(404)
-          .json({ status: "ERROR", message: "Video not found" });
-      }
-      videoObjectId = video._id;
-    }
-
     const chat = await Chat.create({
       userId,
       title: title || "New Chat",
-      videoIds: videoObjectId ? [videoObjectId] : [],
+      sourceIds: [],
       lastActivity: new Date(),
     });
 
     return res.status(201).json({
       status: "OK",
-      message: "Chat created successfully",
+      message: "Chat created successfully. Add sources to start chatting.",
       chat,
     });
   } catch (error) {
@@ -71,7 +60,7 @@ export async function getUserChats(req: Request, res: Response) {
 
   try {
     const chats = await Chat.find({ userId, isActive: true })
-      .populate("videoIds", "title channelName videoId thumbnailUrl")
+      .populate("sourceIds", "title kind url")
       .sort({ lastActivity: -1 })
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit));
@@ -118,7 +107,7 @@ export async function getChatMessages(req: Request, res: Response) {
     }
 
     const messages = await Message.find({ chatId, isVisible: true })
-      .populate("metadata.videoReferences.videoId", "title channelName videoId")
+      .populate("metadata.sourceReferences.sourceId", "title kind url")
       .sort({ createdAt: 1 })
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit));
@@ -139,7 +128,7 @@ export async function getChatMessages(req: Request, res: Response) {
 // Send a message and get AI response
 export async function sendMessage(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { content, videoIds, provider } = req.body;
+  const { content, provider } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -155,12 +144,21 @@ export async function sendMessage(req: Request, res: Response) {
   }
 
   try {
-    // Verify chat belongs to user
-    const chat = await Chat.findOne({ _id: chatId, userId });
+    // Verify chat belongs to user and populate sources
+    const chat = await Chat.findOne({ _id: chatId, userId })
+                           .populate('sourceIds');
     if (!chat) {
       return res
         .status(404)
         .json({ status: "ERROR", message: "Chat not found" });
+    }
+
+    // Require sources before allowing messages
+    if (!chat.sourceIds.length) {
+      return res.status(400).json({
+        status: 'ERROR',
+        message: 'This chat has no sources yet. Add at least one source to start chatting.'
+      });
     }
 
     // Save user message
@@ -171,8 +169,10 @@ export async function sendMessage(req: Request, res: Response) {
       isVisible: true,
     });
 
-    // Get relevant video chunks for RAG using MongoDB Vector Search
-    const relevantChunks = await getRelevantChunks(content, videoIds);
+    // Get relevant source chunks for RAG using MongoDB Vector Search
+    // Convert ObjectIds to strings for the RAG function
+    const sourceIdStrings = chat.sourceIds.map((id: any) => id.toString());
+    const relevantChunks = await getRelevantChunks(content, sourceIdStrings);
 
     // Generate AI response
     const aiResponse = await generateAIResponse(
@@ -188,29 +188,15 @@ export async function sendMessage(req: Request, res: Response) {
       role: "assistant",
       content: aiResponse.content,
       metadata: {
-        videoReferences: aiResponse.videoReferences,
+        sourceReferences: aiResponse.sourceReferences,
         model: aiResponse.model,
         tokenCount: aiResponse.tokenCount,
       },
       isVisible: true,
     });
 
-    // Update chat activity and add video references
-    const updateData: any = { lastActivity: new Date() };
-    if (videoIds && videoIds.length > 0) {
-      const videos = await Video.find({ videoId: { $in: videoIds } });
-      const videoObjectIds = videos.map((v) => v._id);
-      const newVideoIds = videoObjectIds.filter(
-        (id) =>
-          !chat.videoIds.some(
-            (existingId) => existingId.toString() === (id as any).toString()
-          )
-      );
-      if (newVideoIds.length > 0) {
-        updateData.$addToSet = { videoIds: { $each: newVideoIds } };
-      }
-    }
-    await Chat.findByIdAndUpdate(chatId, updateData);
+    // Update chat activity (no need to add videoIds since they're managed by sources)
+    await Chat.findByIdAndUpdate(chatId, { lastActivity: new Date() });
 
     return res.status(201).json({
       status: "OK",
@@ -230,7 +216,7 @@ export async function sendMessage(req: Request, res: Response) {
 // Stream AI response with real-time updates
 export async function streamMessage(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { content, videoIds, provider } = req.body;
+  const { content, provider } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -246,12 +232,21 @@ export async function streamMessage(req: Request, res: Response) {
   }
 
   try {
-    // Verify chat belongs to user
-    const chat = await Chat.findOne({ _id: chatId, userId });
+    // Verify chat belongs to user and populate sources
+    const chat = await Chat.findOne({ _id: chatId, userId })
+                           .populate('sourceIds');
     if (!chat) {
       return res
         .status(404)
         .json({ status: "ERROR", message: "Chat not found" });
+    }
+
+    // Require sources before allowing messages
+    if (!chat.sourceIds.length) {
+      return res.status(400).json({
+        status: 'ERROR',
+        message: 'This chat has no sources yet. Add at least one source to start chatting.'
+      });
     }
 
     // Set up SSE headers
@@ -280,8 +275,10 @@ export async function streamMessage(req: Request, res: Response) {
       })}\n\n`
     );
 
-    // Get relevant video chunks
-    const relevantChunks = await getRelevantChunks(content, videoIds);
+    // Get relevant source chunks
+    // Convert ObjectIds to strings for the RAG function
+    const sourceIdStrings = chat.sourceIds.map((id: any) => id.toString());
+    const relevantChunks = await getRelevantChunks(content, sourceIdStrings);
 
     // Send context event
     res.write(
@@ -301,22 +298,8 @@ export async function streamMessage(req: Request, res: Response) {
       userMessage._id
     );
 
-    // Update chat activity
-    const updateData: any = { lastActivity: new Date() };
-    if (videoIds && videoIds.length > 0) {
-      const videos = await Video.find({ videoId: { $in: videoIds } });
-      const videoObjectIds = videos.map((v) => v._id);
-      const newVideoIds = videoObjectIds.filter(
-        (id) =>
-          !chat.videoIds.some(
-            (existingId) => existingId.toString() === (id as any).toString()
-          )
-      );
-      if (newVideoIds.length > 0) {
-        updateData.$addToSet = { videoIds: { $each: newVideoIds } };
-      }
-    }
-    await Chat.findByIdAndUpdate(chatId, updateData);
+    // Update chat activity (no need to add videoIds since they're managed by sources)
+    await Chat.findByIdAndUpdate(chatId, { lastActivity: new Date() });
 
     res.end();
   } catch (error: any) {
@@ -368,10 +351,10 @@ export async function deleteChat(req: Request, res: Response) {
   }
 }
 
-// Helper function to get relevant video chunks using MongoDB Vector Search
+// Helper function to get relevant source chunks using MongoDB Vector Search
 async function getRelevantChunks(
   query: string,
-  videoIds?: string[]
+  sourceIds?: string[]
 ): Promise<any[]> {
   try {
     // Generate embedding for search query using OpenAI
@@ -393,12 +376,12 @@ async function getRelevantChunks(
       },
     };
 
-    // Only add video filter if videoIds array has content
-    if (videoIds && videoIds.length > 0) {
+    // Only add source filter if sourceIds array has content
+    if (sourceIds && sourceIds.length > 0) {
       // Convert string IDs to ObjectIds
-      const objectIds = videoIds.map((id) => new mongoose.Types.ObjectId(id));
+      const objectIds = sourceIds.map((id: string) => new mongoose.Types.ObjectId(id));
       vectorSearchStage.$vectorSearch.filter = {
-        videoId: { $in: objectIds },
+        sourceId: { $in: objectIds },
       };
     }
 
@@ -411,18 +394,18 @@ async function getRelevantChunks(
       },
     ];
 
-    // Add population stage for video details
+    // Add population stage for source details
     pipeline.push(
       {
         $lookup: {
-          from: "videos",
-          localField: "videoId",
+          from: "sources",
+          localField: "sourceId",
           foreignField: "_id",
-          as: "video",
+          as: "source",
         },
       },
       {
-        $unwind: "$video",
+        $unwind: "$source",
       },
       {
         $project: {
@@ -432,7 +415,7 @@ async function getRelevantChunks(
     );
 
     // Execute vector search
-    const chunks = await VideoChunk.aggregate(pipeline);
+    const chunks = await SourceChunk.aggregate(pipeline);
 
     return chunks;
   } catch (error) {
@@ -454,24 +437,29 @@ async function generateAIResponse(
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Build context from relevant chunks with precise timestamps
+    // Build context from relevant chunks with timestamps for AV content
     const context = relevantChunks
       .map((chunk, index) => {
-        const timestampFormatted = formatTimestamp(chunk.startTime);
-        const youtubeUrl = createYouTubeTimestampUrl(
-          chunk.video.videoId,
-          chunk.startTime
-        );
-
-        return `[Segment ${index + 1}] From video "${chunk.video.title}" (${
-          chunk.video.channelName
-        }) at ${timestampFormatted} (${youtubeUrl}) - Relevance: ${(
-          chunk.score * 100
-        ).toFixed(1)}%${
-          chunk.noSpeechProb
-            ? ` - Confidence: ${((1 - chunk.noSpeechProb) * 100).toFixed(1)}%`
-            : ""
-        }: ${chunk.text}`;
+        let contextInfo = `[Segment ${index + 1}] From ${chunk.source.kind} source "${chunk.source.title || 'Untitled'}"`;
+        
+        // Add timestamp info for YouTube content
+        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+          const timestampFormatted = formatTimestamp(chunk.startTime);
+          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          if (videoId) {
+            const youtubeUrl = createYouTubeTimestampUrl(videoId, chunk.startTime);
+            contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
+          }
+        }
+        
+        contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
+        
+        // Add confidence info if available
+        if (chunk.metadata?.noSpeechProb !== undefined) {
+          contextInfo += ` - Confidence: ${((1 - chunk.metadata.noSpeechProb) * 100).toFixed(1)}%`;
+        }
+        
+        return `${contextInfo}: ${chunk.text}`;
       })
       .join("\n\n");
 
@@ -483,12 +471,15 @@ async function generateAIResponse(
 
     // Build reference examples from actual chunks
     const referenceExamples = relevantChunks
-      .map(
-        (chunk, index) =>
-          `[📺 ${index + 1}](video://${chunk.video.videoId}/${Math.floor(
-            chunk.startTime
-          )})`
-      )
+      .map((chunk, index) => {
+        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          if (videoId) {
+            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(chunk.startTime)})`;
+          }
+        }
+        return `[📄 ${index + 1}](source://${chunk.source._id})`;
+      })
       .slice(0, 2)
       .join(" and ");
 
@@ -540,27 +531,28 @@ Example reference format for this query:
 
     const content = responseContent;
 
-    // Prepare video references with precise timestamps and confidence metrics
-    const videoReferences = relevantChunks.map((chunk) => ({
-      videoId: chunk.video._id,
+    // Prepare source references with precise timestamps and confidence metrics
+    const sourceReferences = relevantChunks.map((chunk) => ({
+      sourceId: chunk.source._id,
       chunkIds: [chunk._id],
-      timestamps: [chunk.startTime],
-      timestampFormatted: formatTimestamp(chunk.startTime),
-      youtubeUrl: createYouTubeTimestampUrl(
-        chunk.video.videoId,
-        chunk.startTime
-      ),
+      timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
+      timestampFormatted: chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : '',
+      youtubeUrl: chunk.source.kind === 'youtube' && chunk.startTime !== undefined ? 
+        createYouTubeTimestampUrl(
+          chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0],
+          chunk.startTime
+        ) : '',
       relevanceScore: chunk.score,
       confidenceMetrics: {
-        avgLogProb: chunk.avgLogProb,
-        noSpeechProb: chunk.noSpeechProb,
-        compressionRatio: chunk.compressionRatio,
+        avgLogProb: chunk.metadata?.avgLogProb,
+        noSpeechProb: chunk.metadata?.noSpeechProb,
+        compressionRatio: chunk.metadata?.compressionRatio,
       },
     }));
 
     return {
       content,
-      videoReferences,
+      sourceReferences,
       tokenCount: responseContent.length, // Estimate token count
       model: provider || "openai",
     };
@@ -568,7 +560,7 @@ Example reference format for this query:
     console.error("Error generating AI response:", error);
     return {
       content: "Sorry, I encountered an error while processing your request.",
-      videoReferences: [],
+      sourceReferences: [],
       tokenCount: 0,
       model: "unknown",
     };
@@ -590,24 +582,29 @@ async function streamAIResponse(
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Build context from relevant chunks
+    // Build context from relevant chunks with timestamps for AV content
     const context = relevantChunks
       .map((chunk, index) => {
-        const timestampFormatted = formatTimestamp(chunk.startTime);
-        const youtubeUrl = createYouTubeTimestampUrl(
-          chunk.video.videoId,
-          chunk.startTime
-        );
-
-        return `[Segment ${index + 1}] From video "${chunk.video.title}" (${
-          chunk.video.channelName
-        }) at ${timestampFormatted} (${youtubeUrl}) - Relevance: ${(
-          chunk.score * 100
-        ).toFixed(1)}%${
-          chunk.noSpeechProb
-            ? ` - Confidence: ${((1 - chunk.noSpeechProb) * 100).toFixed(1)}%`
-            : ""
-        }: ${chunk.text}`;
+        let contextInfo = `[Segment ${index + 1}] From ${chunk.source.kind} source "${chunk.source.title || 'Untitled'}"`;
+        
+        // Add timestamp info for YouTube content
+        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+          const timestampFormatted = formatTimestamp(chunk.startTime);
+          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          if (videoId) {
+            const youtubeUrl = createYouTubeTimestampUrl(videoId, chunk.startTime);
+            contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
+          }
+        }
+        
+        contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
+        
+        // Add confidence info if available
+        if (chunk.metadata?.noSpeechProb !== undefined) {
+          contextInfo += ` - Confidence: ${((1 - chunk.metadata.noSpeechProb) * 100).toFixed(1)}%`;
+        }
+        
+        return `${contextInfo}: ${chunk.text}`;
       })
       .join("\n\n");
 
@@ -619,12 +616,15 @@ async function streamAIResponse(
 
     // Build reference examples from actual chunks
     const referenceExamples = relevantChunks
-      .map(
-        (chunk, index) =>
-          `[📺 ${index + 1}](video://${chunk.video.videoId}/${Math.floor(
-            chunk.startTime
-          )})`
-      )
+      .map((chunk, index) => {
+        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          if (videoId) {
+            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(chunk.startTime)})`;
+          }
+        }
+        return `[📄 ${index + 1}](source://${chunk.source._id})`;
+      })
       .slice(0, 2)
       .join(" and ");
 
@@ -698,21 +698,22 @@ Example reference format for this query:
       }
     );
 
-    // Prepare video references
-    const videoReferences = relevantChunks.map((chunk) => ({
-      videoId: chunk.video._id,
+    // Prepare source references
+    const sourceReferences = relevantChunks.map((chunk) => ({
+      sourceId: chunk.source._id,
       chunkIds: [chunk._id],
-      timestamps: [chunk.startTime],
-      timestampFormatted: formatTimestamp(chunk.startTime),
-      youtubeUrl: createYouTubeTimestampUrl(
-        chunk.video.videoId,
-        chunk.startTime
-      ),
+      timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
+      timestampFormatted: chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : '',
+      youtubeUrl: chunk.source.kind === 'youtube' && chunk.startTime !== undefined ? 
+        createYouTubeTimestampUrl(
+          chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0],
+          chunk.startTime
+        ) : '',
       relevanceScore: chunk.score,
       confidenceMetrics: {
-        avgLogProb: chunk.avgLogProb,
-        noSpeechProb: chunk.noSpeechProb,
-        compressionRatio: chunk.compressionRatio,
+        avgLogProb: chunk.metadata?.avgLogProb,
+        noSpeechProb: chunk.metadata?.noSpeechProb,
+        compressionRatio: chunk.metadata?.compressionRatio,
       },
     }));
 
@@ -720,7 +721,7 @@ Example reference format for this query:
     await Message.findByIdAndUpdate(tempAiMessage._id, {
       content: fullContent,
       metadata: {
-        videoReferences,
+        sourceReferences,
         model: provider,
         tokenCount: fullContent.length,
       },
@@ -731,7 +732,7 @@ Example reference format for this query:
       `data: ${JSON.stringify({
         type: "complete",
         messageId: tempAiMessage._id,
-        videoReferences,
+        sourceReferences,
         model: provider,
         tokenCount: fullContent.length,
       })}\n\n`

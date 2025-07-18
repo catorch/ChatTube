@@ -8,7 +8,7 @@ const sourceRouter = Router();
 sourceRouter.use(authenticateUser);
 
 // Process a new source (YouTube, PDF, etc.)
-// sourceRouter.post("/process", sourceController.processSource);
+sourceRouter.post("/", sourceController.addSources);
 
 // Get all sources with pagination and filtering
 sourceRouter.get("/", sourceController.getSources);

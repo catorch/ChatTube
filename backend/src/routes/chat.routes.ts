@@ -30,9 +30,6 @@ chatRouter.get("/:chatId/sources", sourceController.listSources);
 // Add sources to a specific chat
 chatRouter.post("/:chatId/sources", sourceController.addSources);
 
-// Add YouTube sources (backward compatibility)
-chatRouter.post("/:chatId/sources/youtube", sourceController.addYouTubeSources);
-
 // Remove a specific source from a chat
 chatRouter.delete("/:chatId/sources/:sourceId", sourceController.removeSource);
 

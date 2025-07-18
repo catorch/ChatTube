@@ -228,7 +228,7 @@ export function WelcomePage({
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-light tracking-tight leading-none">
                     <span className="text-foreground">Welcome to</span>
                     <br />
-                    <span className="text-gradient font-medium">ChatTube</span>
+                    <span className="font-medium text-primary">ChatTube</span>
                   </h1>
                   <p className="text-muted-foreground text-lg sm:text-xl lg:text-2xl font-light leading-relaxed max-w-2xl">
                     Transform your video content into intelligent conversations

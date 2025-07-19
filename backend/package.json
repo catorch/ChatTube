@@ -7,6 +7,10 @@
     "build": "tsc",
     "start": "node dist/api.js",
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"ts-node -r tsconfig-paths/register\" src/api.ts",
+    "worker": "npm run build && node dist/workers/ingestWorker.js",
+    "worker:dev": "ts-node -r tsconfig-paths/register src/workers/ingestWorker.ts",
+    "worker:status": "npm run build && node dist/workers/ingestWorker.js status",
+    "worker:cleanup": "npm run build && node dist/workers/ingestWorker.js cleanup",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -20,6 +24,7 @@
     "@types/cookie-parser": "^1.4.8",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
+    "chalk": "^5.4.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

@@ -6,7 +6,7 @@ import {
   StreamEvent,
   Chat as ApiChat,
 } from "../../api/services/chat";
-import { resetStore } from "../../store";
+import { resetStore } from "../../types";
 
 export interface Message {
   id: string;
@@ -15,7 +15,7 @@ export interface Message {
   timestamp: string;
   sources?: string[];
   metadata?: {
-    videoReferences?: any[];
+    sourceReferences?: any[]; // Changed from videoReferences to sourceReferences
     model?: string;
     tokenCount?: number;
   };
@@ -29,7 +29,7 @@ export interface Chat {
   timestamp: string; // Changed from Date to string (ISO format)
   messageCount: number;
   isActive: boolean;
-  videoIds: string[];
+  sourceIds: string[]; // Changed from videoIds to sourceIds
 }
 
 interface ChatState {
@@ -44,7 +44,8 @@ interface ChatState {
   chatList: Chat[];
   chatListLoading: boolean;
   chatListError: string | null;
-  // Removed activeStream - streams will be handled outside Redux
+  // Source selection for messaging
+  selectedSourceIds: string[];
 }
 
 // Async thunks
@@ -54,11 +55,11 @@ export const sendMessage = createAsyncThunk(
     {
       chatId,
       content,
-      selectedSources,
+      selectedSourceIds,
     }: {
       chatId: string;
       content: string;
-      selectedSources: string[];
+      selectedSourceIds: string[];
     },
     { getState }
   ) => {
@@ -67,7 +68,7 @@ export const sendMessage = createAsyncThunk(
 
     const request: SendMessageRequest = {
       content,
-      videoIds: selectedSources,
+      sourceIds: selectedSourceIds, // Changed from videoIds to sourceIds
       provider,
     };
 
@@ -77,7 +78,7 @@ export const sendMessage = createAsyncThunk(
 );
 
 export const loadChatMessages = createAsyncThunk(
-  "chat/loadMessages",
+  "chat/loadChatMessages",
   async (chatId: string) => {
     const response = await chatApi.getChatMessages(chatId);
     return response;
@@ -114,19 +115,22 @@ const convertApiMessage = (apiMessage: ApiMessage): Message => ({
   content: apiMessage.content,
   isUser: apiMessage.role === "user",
   timestamp: apiMessage.createdAt, // Keep as ISO string instead of converting to Date
-  sources: [], // We'll populate this from video references if needed
-  metadata: apiMessage.metadata,
+  sources: [], // We'll populate this from source references if needed
+  metadata: {
+    ...apiMessage.metadata,
+    sourceReferences: apiMessage.metadata?.videoReferences, // Map videoReferences to sourceReferences for backward compatibility
+  },
 });
 
 // Helper function to convert API chat to our format
 const convertApiChat = (apiChat: ApiChat): Chat => ({
   id: apiChat._id,
   title: apiChat.title,
-  lastMessage: "", // Will be populated when we have message data
-  timestamp: apiChat.lastActivity, // Keep as ISO string instead of converting to Date
-  messageCount: 0, // Will be populated when we have message data
+  lastMessage: "", // We'll calculate this from messages if needed
+  timestamp: apiChat.lastActivity || apiChat.updatedAt,
+  messageCount: 0, // We'll calculate this from messages if needed
   isActive: apiChat.isActive,
-  videoIds: apiChat.videoIds,
+  sourceIds: apiChat.sourceIds || [], // Use sourceIds instead of videoIds
 });
 
 const initialState: ChatState = {
@@ -141,7 +145,8 @@ const initialState: ChatState = {
   chatList: [],
   chatListLoading: false,
   chatListError: null,
-  // Removed activeStream - streams will be handled outside Redux
+  // Source selection
+  selectedSourceIds: [],
 };
 
 const chatSlice = createSlice({
@@ -165,6 +170,10 @@ const chatSlice = createSlice({
     },
     setCurrentChatId: (state, action: PayloadAction<string | null>) => {
       state.currentChatId = action.payload;
+      // Clear selected sources when switching chats
+      if (action.payload !== state.currentChatId) {
+        state.selectedSourceIds = [];
+      }
     },
     setSelectedProvider: (
       state,
@@ -172,6 +181,29 @@ const chatSlice = createSlice({
     ) => {
       state.selectedProvider = action.payload;
     },
+
+    // Source selection management
+    setSelectedSourceIds: (state, action: PayloadAction<string[]>) => {
+      state.selectedSourceIds = action.payload;
+    },
+    toggleSourceSelection: (state, action: PayloadAction<string>) => {
+      const sourceId = action.payload;
+      if (state.selectedSourceIds.includes(sourceId)) {
+        state.selectedSourceIds = state.selectedSourceIds.filter(
+          (id) => id !== sourceId
+        );
+      } else {
+        state.selectedSourceIds.push(sourceId);
+      }
+    },
+    selectAllSources: (state, action: PayloadAction<string[]>) => {
+      state.selectedSourceIds = action.payload;
+    },
+    clearSourceSelection: (state) => {
+      state.selectedSourceIds = [];
+    },
+
+    // Streaming management
     startStreaming: (
       state,
       action: PayloadAction<{
@@ -187,42 +219,52 @@ const chatSlice = createSlice({
     },
     handleStreamEvent: (state, action: PayloadAction<StreamEvent>) => {
       const event = action.payload;
-      console.log("Processing stream event in slice:", event); // Debug log
 
       switch (event.type) {
         case "user_message":
-          if (event.message && typeof event.message === "object") {
-            const userMessage = convertApiMessage(event.message as ApiMessage);
-            state.messages.push(userMessage);
+          if (event.message) {
+            // Handle both Message object and string types
+            const userMessage =
+              typeof event.message === "string"
+                ? ({
+                    id: `temp-${Date.now()}`,
+                    content: event.message,
+                    isUser: true,
+                    timestamp: new Date().toISOString(),
+                  } as Message)
+                : convertApiMessage(event.message as ApiMessage);
+
+            // Check if message already exists to avoid duplicates
+            const existingMessage = state.messages.find(
+              (m) => m.id === userMessage.id
+            );
+            if (!existingMessage) {
+              state.messages.push(userMessage);
+            }
           }
           break;
 
         case "start":
-          // Start the streaming state
-          state.streamingMessageId = event.messageId || null;
-          state.isLoading = true;
+          if (event.messageId) {
+            state.streamingMessageId = event.messageId;
+            state.isLoading = true;
 
-          if (event.message) {
-            // Add user message first
-            const userMessage = convertApiMessage(event.message as ApiMessage);
-            state.messages.push(userMessage);
+            // Add placeholder message for streaming
+            const placeholderMessage: Message = {
+              id: event.messageId,
+              content: "",
+              isUser: false,
+              timestamp: new Date().toISOString(),
+              isStreaming: true,
+            };
+            state.messages.push(placeholderMessage);
           }
-
-          // Add empty AI message that will be filled with streaming content
-          const aiMessage: Message = {
-            id: event.messageId || `temp-${Date.now()}`,
-            content: "",
-            isUser: false,
-            timestamp: new Date().toISOString(),
-            isStreaming: true,
-          };
-          state.messages.push(aiMessage);
           break;
 
         case "delta":
-          if (event.messageId && event.content) {
+          if (state.streamingMessageId && event.content) {
             const messageIndex = state.messages.findIndex(
-              (msg) => msg.id === event.messageId
+              (m) => m.id === state.streamingMessageId
             );
             if (messageIndex !== -1) {
               state.messages[messageIndex].content += event.content;
@@ -231,37 +273,50 @@ const chatSlice = createSlice({
           break;
 
         case "complete":
-          if (event.messageId) {
+          if (state.streamingMessageId && event.message) {
+            // Handle both Message object and string types
+            const finalMessage =
+              typeof event.message === "string"
+                ? ({
+                    id: state.streamingMessageId,
+                    content: event.message,
+                    isUser: false,
+                    timestamp: new Date().toISOString(),
+                    metadata: {
+                      sourceReferences: event.videoReferences,
+                      model: event.model,
+                      tokenCount: event.tokenCount,
+                    },
+                  } as Message)
+                : convertApiMessage(event.message as ApiMessage);
+
             const messageIndex = state.messages.findIndex(
-              (msg) => msg.id === event.messageId
+              (m) => m.id === state.streamingMessageId
             );
             if (messageIndex !== -1) {
-              state.messages[messageIndex].isStreaming = false;
-              if (event.videoReferences) {
-                state.messages[messageIndex].metadata = {
-                  videoReferences: event.videoReferences,
-                  model: event.model,
-                  tokenCount: event.tokenCount,
-                };
-              }
+              state.messages[messageIndex] = {
+                ...finalMessage,
+                isStreaming: false,
+              };
             }
           }
           state.streamingMessageId = null;
           state.isLoading = false;
-          state.currentInput = "";
+          state.error = null;
           break;
 
         case "error":
+          state.streamingMessageId = null;
+          state.isLoading = false;
           state.error =
             typeof event.message === "string"
               ? event.message
-              : "Stream error occurred";
-          state.streamingMessageId = null;
-          state.isLoading = false;
+              : "An error occurred during streaming";
           break;
       }
     },
   },
+
   extraReducers: (builder) => {
     // Send message
     builder
@@ -328,6 +383,7 @@ const chatSlice = createSlice({
         if (state.currentChatId === action.payload.chatId) {
           state.currentChatId = null;
           state.messages = [];
+          state.selectedSourceIds = [];
         }
       })
       .addCase(deleteChat.rejected, (state, action) => {
@@ -369,12 +425,14 @@ export const {
   setCurrentInput,
   setCurrentChatId,
   setSelectedProvider,
+  setSelectedSourceIds,
+  toggleSourceSelection,
+  selectAllSources,
+  clearSourceSelection,
   startStreaming,
   stopStreaming,
   handleStreamEvent,
 } = chatSlice.actions;
 
-// Export the async thunks
 export { loadChatList, deleteChat, renameChatTitle };
-
 export default chatSlice.reducer;

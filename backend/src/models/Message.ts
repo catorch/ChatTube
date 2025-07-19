@@ -5,8 +5,8 @@ export interface IMessage extends Document {
   role: "user" | "assistant" | "system";
   content: string;
   metadata?: {
-    videoReferences?: {
-      videoId: Types.ObjectId;
+    sourceReferences?: {
+      sourceId: Types.ObjectId;
       chunkIds: Types.ObjectId[];
       timestamps?: number[];
     }[];
@@ -41,16 +41,16 @@ const MessageSchema = new Schema<IMessage>(
       trim: true,
     },
     metadata: {
-      videoReferences: [
+      sourceReferences: [
         {
-          videoId: {
+          sourceId: {
             type: Schema.Types.ObjectId,
-            ref: "Video",
+            ref: "Source",
           },
           chunkIds: [
             {
               type: Schema.Types.ObjectId,
-              ref: "VideoChunk",
+              ref: "SourceChunk",
             },
           ],
           timestamps: [Number],

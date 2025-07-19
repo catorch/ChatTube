@@ -15,7 +15,11 @@ export interface LLMConfig {
 
 export interface LLMClient {
   /** Stream a reply. `messages` is the full chat log so far. */
-  streamChat(messages: LLMMessage[], onDelta: ChunkHandler, config?: LLMConfig): Promise<void>;
+  streamChat(
+    messages: LLMMessage[],
+    onDelta: ChunkHandler,
+    config?: LLMConfig
+  ): Promise<void>;
 }
 
-export type LLMProvider = 'openai' | 'gemini' | 'claude';
+export type LLMProvider = "openai" | "gemini" | "claude";

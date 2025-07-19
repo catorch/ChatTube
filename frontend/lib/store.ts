@@ -1,12 +1,11 @@
-import { configureStore, createAction } from "@reduxjs/toolkit";
+import { configureStore } from "@reduxjs/toolkit";
 import { persistStore, persistReducer, createTransform } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import authReducer from "./features/auth/authSlice";
 import sourcesReducer from "./features/sources/sourcesSlice";
 import chatReducer from "./features/chat/chatSlice";
-
-// Global reset action
-export const resetStore = createAction("global/resetStore");
+import { resetStore } from "./types";
+import { api } from "./api/base";
 
 // Transform for redux-persist (all slices now use ISO strings, so no date conversion needed)
 const dateTransform = createTransform(
@@ -66,6 +65,7 @@ export const store = configureStore({
     auth: persistedAuthReducer,
     sources: persistedSourcesReducer,
     chat: persistedChatReducer,
+    [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -79,7 +79,7 @@ export const store = configureStore({
         // All date fields now use ISO strings, so no ignored paths needed
         ignoredPaths: [],
       },
-    }),
+    }).concat(api.middleware),
 });
 
 export const persistor = persistStore(store);

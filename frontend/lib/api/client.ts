@@ -1,5 +1,3 @@
-import { handleAuthError } from "./auth-interceptor";
-
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 
@@ -83,9 +81,7 @@ class ApiClient {
           // If response isn't JSON, use the default error message
         }
 
-        // Handle auth errors
-        handleAuthError(response.status);
-
+        // Auth errors (401) will be handled by the calling components
         throw new ApiError(errorMessage, response.status);
       }
 

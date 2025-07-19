@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as chatController from "../controllers/chat.controller";
+import * as sourceController from "../controllers/source.controller";
 import { authenticateUser } from "../middlewares/user.middleware";
 
 const chatRouter = Router();
@@ -21,6 +22,16 @@ chatRouter.post("/:chatId/messages", chatController.sendMessage);
 
 // Stream a message to a chat with real-time AI response
 chatRouter.post("/:chatId/stream", chatController.streamMessage);
+
+// ----- Sources within a chat -----
+// List sources for a specific chat
+chatRouter.get("/:chatId/sources", sourceController.listSources);
+
+// Add sources to a specific chat
+chatRouter.post("/:chatId/sources", sourceController.addSources);
+
+// Remove a specific source from a chat
+chatRouter.delete("/:chatId/sources/:sourceId", sourceController.removeSource);
 
 // Delete a chat
 chatRouter.delete("/:chatId", chatController.deleteChat);

@@ -3,7 +3,7 @@ import { Schema, model, Document, Types } from "mongoose";
 export interface IChat extends Document {
   userId: Types.ObjectId;
   title: string;
-  videoIds: Types.ObjectId[]; 
+  sourceIds: Types.ObjectId[];  // sources within this chat
   isActive: boolean;
   lastActivity: Date;
   createdAt: Date;
@@ -24,10 +24,10 @@ const ChatSchema = new Schema<IChat>(
       trim: true,
       maxlength: 200,
     },
-    videoIds: [
+    sourceIds: [
       {
         type: Schema.Types.ObjectId,
-        ref: "Video",
+        ref: "Source",
       },
     ],
     isActive: {

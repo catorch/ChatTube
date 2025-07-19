@@ -34,7 +34,7 @@ const getAuthHeaders = (
 
 export interface SendMessageRequest {
   content: string;
-  videoIds?: string[];
+  sourceIds?: string[]; // Changed from videoIds to sourceIds
   provider?: "openai" | "anthropic" | "google";
 }
 
@@ -57,7 +57,7 @@ export interface Chat {
   _id: string;
   userId: string;
   title: string;
-  videoIds: string[];
+  sourceIds: string[]; // Changed from videoIds to sourceIds
   lastActivity: string;
   isActive: boolean;
   createdAt: string;
@@ -89,13 +89,12 @@ export interface MessagesResponse {
 
 export const chatApi = {
   async createChat(
-    title?: string,
-    videoId?: string
-  ): Promise<{ status: string; chat: Chat }> {
+    title?: string
+  ): Promise<{ status: string; chat: Chat; message?: string }> {
     const response = await fetch(`${API_BASE_URL}/chats`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ title, videoId }),
+      body: JSON.stringify({ title }),
     });
 
     if (!response.ok) {

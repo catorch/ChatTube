@@ -6,6 +6,45 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// New Source types for generic sources
+export interface Source {
+  _id: string;
+  userId: string;
+  chatId: string;
+  kind: "youtube" | "pdf" | "web" | "file";
+  title?: string;
+  url?: string;
+  fileId?: string;
+  metadata: {
+    processingStatus?: "pending" | "processing" | "completed" | "failed";
+    isProcessed?: boolean;
+    errorMessage?: string;
+    // YouTube specific metadata
+    videoId?: string;
+    channelName?: string;
+    channelId?: string;
+    duration?: number;
+    uploadDate?: string;
+    thumbnailUrl?: string;
+    viewCount?: number;
+    description?: string;
+    // Processing metadata
+    chunksCount?: number;
+    embeddingsGenerated?: number;
+    audioProcessingTime?: number;
+    embeddingProcessingTime?: number;
+    totalProcessingTime?: number;
+    createdAt?: string;
+    startedAt?: string;
+    completedAt?: string;
+    failedAt?: string;
+    [key: string]: any;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Legacy Video type (kept for backward compatibility if needed)
 export interface Video {
   _id: string;
   videoId: string;
@@ -42,6 +81,32 @@ export interface VideosQuery {
   status?: "processing" | "completed" | "failed";
 }
 
+// New Source-related types
+export interface SourceCreateRequest {
+  kind: "youtube" | "pdf" | "web" | "file";
+  url?: string;
+  title?: string;
+  fileId?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface SourcesResponse extends ApiResponse<Source[]> {
+  sources: Source[];
+  message?: string;
+  added?: number;
+  existing?: number;
+  processingNote?: string;
+}
+
+export interface SourceStatusResponse extends ApiResponse<any> {
+  sourceStatus: {
+    status: string;
+    attempts: number;
+    nextRunAt?: string;
+    lastError?: string;
+  };
+}
+
 // Auth types
 export interface User {
   _id: string;
@@ -51,6 +116,11 @@ export interface User {
   lastName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AuthResponse extends ApiResponse<User> {
+  user: User;
+  token: string;
 }
 
 export interface LoginRequest {
@@ -65,13 +135,8 @@ export interface SignupRequest {
   lastName?: string;
 }
 
-export interface AuthResponse extends ApiResponse<User> {
-  user: User;
-  message: string;
-  token?: string; // Optional since login includes it but signup doesn't
-}
-
-export interface AuthCheckResponse extends ApiResponse<User> {
-  user: User;
-  authenticated: boolean;
+export interface AuthCheckResponse {
+  status: string;
+  isAuthenticated: boolean;
+  user?: User;
 }

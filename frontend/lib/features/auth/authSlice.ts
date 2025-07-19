@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { authApi } from "../../api/services/auth";
 import { User, LoginRequest, SignupRequest } from "../../api/types";
-import { resetStore } from "../../store";
+import { resetStore } from "../../types";
 
 interface AuthState {
   user: User | null;
@@ -64,7 +64,7 @@ export const checkAuth = createAsyncThunk(
     }
 
     const response = await authApi.checkAuth();
-    return response.user;
+    return response.user || null;
   }
 );
 

@@ -128,7 +128,7 @@ export async function getChatMessages(req: Request, res: Response) {
 // Send a message and get AI response
 export async function sendMessage(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { content, provider } = req.body;
+  const { content, provider, sourceIds } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -161,6 +161,23 @@ export async function sendMessage(req: Request, res: Response) {
         message:
           "This chat has no sources yet. Add at least one source to start chatting.",
       });
+    }
+
+    // If sourceIds are provided, validate they belong to this chat
+    if (sourceIds && sourceIds.length > 0) {
+      const chatSourceIdStrings = chat.sourceIds.map((id: any) =>
+        typeof id === "object" && id._id ? id._id.toString() : id.toString()
+      );
+      const invalidIds = sourceIds.filter(
+        (id: string) => !chatSourceIdStrings.includes(id)
+      );
+      if (invalidIds.length > 0) {
+        return res.status(400).json({
+          status: "ERROR",
+          message:
+            "Some of the provided source IDs do not belong to this chat.",
+        });
+      }
     }
 
     // Save user message
@@ -218,7 +235,7 @@ export async function sendMessage(req: Request, res: Response) {
 // Stream AI response with real-time updates
 export async function streamMessage(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { content, provider } = req.body;
+  const { content, provider, sourceIds } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
@@ -253,6 +270,23 @@ export async function streamMessage(req: Request, res: Response) {
       });
     }
 
+    // If sourceIds are provided, validate they belong to this chat
+    if (sourceIds && sourceIds.length > 0) {
+      const chatSourceIdStrings = chat.sourceIds.map((id: any) =>
+        typeof id === "object" && id._id ? id._id.toString() : id.toString()
+      );
+      const invalidIds = sourceIds.filter(
+        (id: string) => !chatSourceIdStrings.includes(id)
+      );
+      if (invalidIds.length > 0) {
+        return res.status(400).json({
+          status: "ERROR",
+          message:
+            "Some of the provided source IDs do not belong to this chat.",
+        });
+      }
+    }
+
     // Set up SSE headers
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -280,8 +314,16 @@ export async function streamMessage(req: Request, res: Response) {
     );
 
     // Get relevant source chunks
-    // Convert ObjectIds to strings for the RAG function
-    const sourceIdStrings = chat.sourceIds.map((id: any) => id.toString());
+    // Use sourceIds from request if provided, otherwise use all chat sources
+    const sourceIdStrings =
+      sourceIds && sourceIds.length > 0
+        ? sourceIds // Frontend already sends string IDs
+        : chat.sourceIds.map((id: any) => {
+            // Handle both populated Source objects and ObjectIds for fallback
+            return typeof id === "object" && id._id
+              ? id._id.toString()
+              : id.toString();
+          });
     const relevantChunks = await getRelevantChunks(content, sourceIdStrings);
 
     // Send context event
@@ -382,13 +424,20 @@ async function getRelevantChunks(
 
     // Only add source filter if sourceIds array has content
     if (sourceIds && sourceIds.length > 0) {
-      // Convert string IDs to ObjectIds
-      const objectIds = sourceIds.map(
-        (id: string) => new mongoose.Types.ObjectId(id)
-      );
-      vectorSearchStage.$vectorSearch.filter = {
-        sourceId: { $in: objectIds },
-      };
+      // Convert string IDs to ObjectIds with validation
+      const validIds = sourceIds.filter((id: string) => {
+        // Check if the ID is a valid ObjectId string (24 hex characters)
+        return id && typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
+      });
+
+      if (validIds.length > 0) {
+        const objectIds = validIds.map(
+          (id: string) => new mongoose.Types.ObjectId(id)
+        );
+        vectorSearchStage.$vectorSearch.filter = {
+          sourceId: { $in: objectIds },
+        };
+      }
     }
 
     const pipeline: any[] = [
@@ -769,10 +818,14 @@ Example reference format for this query:
       },
     });
 
+    // Get the updated message to send with completion event
+    const finalMessage = await Message.findById(tempAiMessage._id);
+
     // Send completion event
     res.write(
       `data: ${JSON.stringify({
         type: "complete",
+        message: finalMessage,
         messageId: tempAiMessage._id,
         sourceReferences,
         model: provider,

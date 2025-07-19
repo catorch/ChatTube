@@ -1,6 +1,7 @@
-import { apiClient } from "../client";
+import { api } from "../base";
+import { FrontendSource } from "../../features/sources/sourcesSlice";
 
-// API Types for Sources
+// Keep existing types for compatibility
 export interface Source {
   _id: string;
   userId: string;
@@ -48,7 +49,7 @@ export interface SourcesResponse {
 }
 
 export interface SourceStatusResponse {
-  status: "OK" | "ERROR";
+  status: string;
   sourceStatus: {
     status: string;
     attempts: number;
@@ -61,79 +62,102 @@ export interface AddSourcesRequest {
   sources: SourceCreateRequest[];
 }
 
-export const sourcesApi = {
-  /**
-   * Get all sources for a specific chat
-   */
+// Helper function to convert backend source to frontend source
+const convertBackendSource = (backendSource: Source): FrontendSource => ({
+  id: backendSource._id,
+  chatId: backendSource.chatId,
+  kind: backendSource.kind,
+  title: backendSource.title || `${backendSource.kind} source`,
+  url: backendSource.url,
+  thumbnail: backendSource.metadata.thumbnailUrl,
+  description: backendSource.metadata.description,
+  status: (backendSource.metadata.processingStatus as any) || "pending",
+  lastUpdated: backendSource.updatedAt,
+  metadata: backendSource.metadata,
+});
+
+// RTK Query API endpoints
+export const sourcesApi = api.injectEndpoints({
+  endpoints: (build) => ({
+    // Main endpoint for listing sources with polling support
+    listSources: build.query<FrontendSource[], string>({
+      query: (chatId) => `/chats/${chatId}/sources`,
+      transformResponse: (response: SourcesResponse) =>
+        response.sources.map(convertBackendSource),
+      providesTags: (result) =>
+        result
+          ? [
+              // One tag per source so a single source can be invalidated
+              ...result.map((s) => ({ type: "Source" as const, id: s.id })),
+              { type: "Source", id: "LIST" },
+            ]
+          : [{ type: "Source", id: "LIST" }],
+    }),
+
+    // Add sources to chat
+    addSources: build.mutation<
+      SourcesResponse,
+      { chatId: string; sources: SourceCreateRequest[] }
+    >({
+      query: ({ chatId, sources }) => ({
+        url: `/chats/${chatId}/sources`,
+        method: "POST",
+        body: { sources },
+      }),
+      invalidatesTags: [{ type: "Source", id: "LIST" }],
+    }),
+
+    // Remove source from chat
+    removeSource: build.mutation<
+      { status: string; message: string },
+      { chatId: string; sourceId: string }
+    >({
+      query: ({ chatId, sourceId }) => ({
+        url: `/chats/${chatId}/sources/${sourceId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (result, error, { sourceId }) => [
+        { type: "Source", id: sourceId },
+        { type: "Source", id: "LIST" },
+      ],
+    }),
+
+    // Get source status (less needed now due to polling)
+    getSourceStatus: build.query<SourceStatusResponse, string>({
+      query: (sourceId) => `/sources/${sourceId}/status`,
+      providesTags: (result, error, sourceId) => [
+        { type: "Source", id: sourceId },
+      ],
+    }),
+
+    // Search source chunks
+    searchSourceChunks: build.mutation<
+      any,
+      { query: string; sourceIds?: string[]; limit?: number }
+    >({
+      query: ({ query, sourceIds, limit }) => ({
+        url: "/sources/search",
+        method: "POST",
+        body: { query, sourceIds, limit },
+      }),
+    }),
+  }),
+});
+
+// Export hooks
+export const {
+  useListSourcesQuery,
+  useAddSourcesMutation,
+  useRemoveSourceMutation,
+  useGetSourceStatusQuery,
+  useSearchSourceChunksMutation,
+} = sourcesApi;
+
+// Legacy API object for backward compatibility (can be removed later)
+export const sourcesApi_legacy = {
   async getChatSources(chatId: string): Promise<SourcesResponse> {
-    return apiClient.get<SourcesResponse>(`/chats/${chatId}/sources`);
+    // This is now handled by useListSourcesQuery
+    throw new Error("Use useListSourcesQuery instead");
   },
-
-  /**
-   * Add sources to a specific chat
-   */
-  async addSourcesToChat(
-    chatId: string,
-    sources: SourceCreateRequest[]
-  ): Promise<SourcesResponse> {
-    const request: AddSourcesRequest = { sources };
-    return apiClient.post<SourcesResponse>(`/chats/${chatId}/sources`, request);
-  },
-
-  /**
-   * Add a single source to a chat (convenience method)
-   */
-  async addSourceToChat(
-    chatId: string,
-    source: SourceCreateRequest
-  ): Promise<SourcesResponse> {
-    return this.addSourcesToChat(chatId, [source]);
-  },
-
-  /**
-   * Remove a source from a chat
-   */
-  async removeSource(
-    chatId: string,
-    sourceId: string
-  ): Promise<{ status: string; message: string }> {
-    return apiClient.delete(`/chats/${chatId}/sources/${sourceId}`);
-  },
-
-  /**
-   * Get source processing status
-   */
-  async getSourceStatus(sourceId: string): Promise<SourceStatusResponse> {
-    return apiClient.get<SourceStatusResponse>(`/sources/${sourceId}/status`);
-  },
-
-  /**
-   * Search source chunks for RAG
-   */
-  async searchSourceChunks(
-    query: string,
-    sourceIds?: string[],
-    limit?: number
-  ) {
-    return apiClient.post("/sources/search", {
-      query,
-      sourceIds,
-      limit,
-    });
-  },
-
-  /**
-   * Get global sources list (admin/global view)
-   */
-  async getGlobalSources(page = 1, limit = 10, kind?: string) {
-    const params = new URLSearchParams();
-    params.append("page", page.toString());
-    params.append("limit", limit.toString());
-    if (kind) params.append("kind", kind);
-
-    const queryString = params.toString();
-    const endpoint = `/sources${queryString ? `?${queryString}` : ""}`;
-
-    return apiClient.get(endpoint);
-  },
+  // ... other legacy methods can be removed gradually
 };

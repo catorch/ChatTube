@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
-  fetchChatSources,
-  removeSourceFromChat,
-  selectChatSources,
-  selectChatSourcesLoading,
-  selectChatSourcesError,
-  selectIsAddingSource,
-  FrontendSource, // Import the FrontendSource type
-} from "@/lib/features/sources/sourcesSlice";
+  useListSourcesQuery,
+  useRemoveSourceMutation,
+} from "@/lib/api/services/sources";
+import {
+  makeSelectIsProcessing,
+  makeSelectProcessingCount,
+  makeSelectCompletedCount,
+} from "@/lib/features/sources/selectors";
+import { FrontendSource } from "@/lib/features/sources/sourcesSlice";
 import {
   toggleSourceSelection,
   selectAllSources,
@@ -102,29 +103,44 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
     (state) => state.chat
   );
 
-  // Get chat-specific sources using selectors
-  const sources = useAppSelector((state) =>
-    currentChatId ? selectChatSources(state, currentChatId) : []
+  // Create memoized selectors for this chat
+  const selectIsProcessing = useMemo(
+    () => (currentChatId ? makeSelectIsProcessing(currentChatId) : () => false),
+    [currentChatId]
   );
-  const isLoadingSources = useAppSelector((state) =>
-    currentChatId ? selectChatSourcesLoading(state, currentChatId) : false
+  const selectProcessingCount = useMemo(
+    () => (currentChatId ? makeSelectProcessingCount(currentChatId) : () => 0),
+    [currentChatId]
   );
-  const sourcesError = useAppSelector((state) =>
-    currentChatId ? selectChatSourcesError(state, currentChatId) : null
+  const selectCompletedCount = useMemo(
+    () => (currentChatId ? makeSelectCompletedCount(currentChatId) : () => 0),
+    [currentChatId]
   );
-  const isAddingSource = useAppSelector(selectIsAddingSource);
+
+  // Get processing status from selectors
+  const isProcessing = useAppSelector(selectIsProcessing);
+  const processingCount = useAppSelector(selectProcessingCount);
+  const completedCount = useAppSelector(selectCompletedCount);
+
+  // 🟢 RTK Query with automatic polling - one line does it all!
+  const {
+    data: sources = [],
+    isLoading: isInitialLoading, // Only true for initial load
+    isFetching, // True during polling, but don't hide UI
+    error: sourcesError,
+  } = useListSourcesQuery(currentChatId!, {
+    skip: !currentChatId, // wait until we have a chat
+    pollingInterval: isProcessing ? 5_000 : 0, // 5s while needed, stop when done
+    refetchOnFocus: true, // nice-to-have
+    refetchOnReconnect: true, // nice-to-have
+  });
+
+  const [removeSource] = useRemoveSourceMutation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDiscoverModalOpen, setIsDiscoverModalOpen] = useState(false);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
-
-  // Fetch sources when chat changes
-  useEffect(() => {
-    if (currentChatId) {
-      dispatch(fetchChatSources(currentChatId));
-    }
-  }, [currentChatId, dispatch]);
 
   const filteredSources = sources.filter(
     (source: FrontendSource) =>
@@ -133,14 +149,6 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
         ?.toLowerCase()
         .includes(searchQuery.toLowerCase())
   );
-
-  const processingCount = sources.filter(
-    (s: FrontendSource) => s.status === "processing" || s.status === "pending"
-  ).length;
-
-  const completedCount = sources.filter(
-    (s: FrontendSource) => s.status === "completed"
-  ).length;
 
   const handleSelectAll = () => {
     const allSourceIds = filteredSources.map((s: FrontendSource) => s.id);
@@ -159,18 +167,16 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
     if (!currentChatId) return;
 
     try {
-      await dispatch(
-        removeSourceFromChat({ chatId: currentChatId, sourceId })
-      ).unwrap();
+      await removeSource({ chatId: currentChatId, sourceId }).unwrap();
     } catch (error) {
       console.error("Failed to remove source:", error);
     }
   };
 
   const handleRefreshSources = () => {
-    if (currentChatId) {
-      dispatch(fetchChatSources(currentChatId));
-    }
+    // RTK Query will automatically refetch when needed, but we can manually trigger
+    // Note: refetch is handled automatically by the polling mechanism
+    // If manual refresh is needed, we could add a refetch() call here
   };
 
   const isAllSelected =
@@ -218,11 +224,11 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
             size="icon"
             variant="ghost"
             onClick={handleRefreshSources}
-            disabled={isLoadingSources}
+            disabled={isInitialLoading}
             className="h-8 w-8"
           >
             <RefreshCw
-              className={`h-4 w-4 ${isLoadingSources ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
             />
           </Button>
         </div>
@@ -309,7 +315,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
               </p>
             </div>
           </div>
-        ) : isLoadingSources ? (
+        ) : isInitialLoading ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-primary" />

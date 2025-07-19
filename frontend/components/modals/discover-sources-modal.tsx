@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { addSourceToChat } from "@/lib/features/sources/sourcesSlice";
+import { useAppSelector } from "@/lib/hooks";
+import { useAddSourcesMutation } from "@/lib/api/services/sources";
 import {
   Dialog,
   DialogContent,
@@ -122,9 +122,8 @@ export function DiscoverSourcesModal({
   isOpen,
   onClose,
 }: DiscoverSourcesModalProps) {
-  const dispatch = useAppDispatch();
   const { currentChatId } = useAppSelector((state) => state.chat);
-  const { isAddingSource } = useAppSelector((state) => state.sources);
+  const [addSources, { isLoading: isAddingSource }] = useAddSourcesMutation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("trending");
 
@@ -164,10 +163,10 @@ export function DiscoverSourcesModal({
     }
 
     try {
-      await dispatch(
-        addSourceToChat({
-          chatId: currentChatId,
-          source: {
+      const result = await addSources({
+        chatId: currentChatId,
+        sources: [
+          {
             kind: source.kind,
             url: source.url,
             title: source.name,
@@ -178,8 +177,12 @@ export function DiscoverSourcesModal({
               duration: source.duration,
             },
           },
-        })
-      ).unwrap();
+        ],
+      });
+
+      if ("error" in result) {
+        throw new Error("Failed to add source");
+      }
 
       // Close modal on success
       onClose();

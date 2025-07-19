@@ -11,7 +11,7 @@ import {
 } from "@/lib/features/chat/chatSlice";
 import { clearStoreAndPersist } from "@/lib/store";
 import { SourcesPanel } from "./sources-panel";
-import { ChatPanel } from "./chat-panel";
+import ChatPanel from "./chat-panel";
 import { WelcomePage } from "@/components/welcome/welcome-page";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";

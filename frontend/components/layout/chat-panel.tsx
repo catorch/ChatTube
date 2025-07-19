@@ -12,6 +12,7 @@ import {
   stopStreaming,
   handleStreamEvent,
 } from "@/lib/features/chat/chatSlice";
+import { selectChatSources } from "@/lib/features/sources/sourcesSlice";
 import { chatApi } from "@/lib/api/services/chat";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,7 @@ import {
 } from "lucide-react";
 
 const AIAvatar = () => (
-  <div className="flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-primary/10">
+  <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-primary/10">
     <Sparkles className="h-5 w-5 text-white relative z-10" />
   </div>
 );
@@ -112,7 +113,7 @@ const getMessageRadius = (
   }
 };
 
-export function ChatPanel() {
+export default function ChatPanel() {
   const dispatch = useAppDispatch();
   const {
     messages,
@@ -122,15 +123,22 @@ export function ChatPanel() {
     selectedProvider,
     error,
     streamingMessageId,
+    selectedSourceIds,
   } = useAppSelector((state) => state.chat);
-  const { selectedSources } = useAppSelector((state) => state.sources);
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const chatSources = useAppSelector((state) =>
+    currentChatId ? selectChatSources(state, currentChatId) : []
+  );
   const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamRef = useRef<{ close: () => void } | null>(null);
+
+  // Check if there are any sources available in the chat
+  const hasAvailableSources = chatSources.length > 0;
+  const hasSelectedSources = selectedSourceIds.length > 0;
 
   // Get user initials for display
   const getUserInitials = () => {
@@ -202,7 +210,13 @@ export function ChatPanel() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || isLoading || !currentChatId || !isAuthenticated)
+    if (
+      !inputValue.trim() ||
+      isLoading ||
+      !currentChatId ||
+      !isAuthenticated ||
+      !hasSelectedSources
+    )
       return;
 
     const content = inputValue.trim();
@@ -220,7 +234,7 @@ export function ChatPanel() {
         currentChatId,
         {
           content,
-          videoIds: selectedSources,
+          sourceIds: selectedSourceIds,
           provider: selectedProvider,
         },
         (event) => {
@@ -295,7 +309,7 @@ export function ChatPanel() {
     return (
       <div className="flex-1 flex flex-col h-full bg-background items-center justify-center">
         <div className="text-center py-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-full mb-4 shadow-[var(--elev-2)]">
             <MessageCircle className="h-8 w-8 text-white relative z-10" />
           </div>
           <h3 className="text-lg font-semibold mb-2">Chat with Your Videos</h3>
@@ -316,9 +330,9 @@ export function ChatPanel() {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
             <span className="text-sm text-muted-foreground">
-              {selectedSources.length} sources selected
+              {selectedSourceIds.length} sources selected
             </span>
-            {selectedSources.length > 0 && (
+            {selectedSourceIds.length > 0 && (
               <Badge variant="outline" className="text-xs">
                 Ready for analysis
               </Badge>
@@ -390,24 +404,50 @@ export function ChatPanel() {
           <div className="max-w-4xl mx-auto space-y-6">
             {messageGroups.length === 0 ? (
               <div className="text-center py-16">
-                <div className="inline-flex items-center justify-center w-20 h-20 lux-gradient rounded-full mb-6 shadow-[var(--elev-2)] floating">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-full mb-6 shadow-[var(--elev-2)] floating">
                   <Sparkles className="h-10 w-10 text-white relative z-10" />
                 </div>
                 <h3 className="text-xl font-semibold mb-4 text-foreground">
                   Welcome to ChatTube
                 </h3>
-                <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto">
-                  Start a conversation by asking questions about your selected
-                  sources. I&apos;ll help you explore and understand your
-                  content with intelligent AI analysis.
-                </p>
-                {selectedSources.length > 0 && (
-                  <div className="mt-6">
+                {!hasAvailableSources ? (
+                  <div>
+                    <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto mb-4">
+                      Add sources to your chat to start analyzing and asking
+                      questions about your content.
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className="bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-300"
+                    >
+                      No sources added yet
+                    </Badge>
+                  </div>
+                ) : !hasSelectedSources ? (
+                  <div>
+                    <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto mb-4">
+                      Select sources from the sidebar to start analyzing your
+                      content with AI.
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className="bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300"
+                    >
+                      {chatSources.length} sources available - none selected
+                    </Badge>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto mb-4">
+                      Start a conversation by asking questions about your
+                      selected sources. I&apos;ll help you explore and
+                      understand your content with intelligent AI analysis.
+                    </p>
                     <Badge
                       variant="outline"
                       className="bg-primary/5 border-primary/20 text-primary"
                     >
-                      {selectedSources.length} sources ready for analysis
+                      {selectedSourceIds.length} sources ready for analysis
                     </Badge>
                   </div>
                 )}
@@ -452,7 +492,7 @@ export function ChatPanel() {
                               )}
                               ${
                                 group.isUser
-                                  ? "lux-gradient text-white shadow-lg ml-auto max-w-fit"
+                                  ? "bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg ml-auto max-w-fit"
                                   : "card-soft shadow-[var(--elev-1)] max-w-fit"
                               }
                             `}
@@ -542,10 +582,16 @@ export function ChatPanel() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask me anything about your sources..."
-              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 hide-scrollbar"
+              placeholder={
+                !hasAvailableSources
+                  ? "Add sources to start chatting..."
+                  : !hasSelectedSources
+                  ? "Select sources to analyze..."
+                  : "Ask me anything about your sources..."
+              }
+              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
               rows={1}
-              disabled={isLoading}
+              disabled={isLoading || !hasSelectedSources}
             />
 
             <div className="absolute right-3 bottom-3 flex items-center gap-1 sm:gap-2">
@@ -554,7 +600,7 @@ export function ChatPanel() {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading}
+                disabled={isLoading || !hasSelectedSources}
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -563,7 +609,7 @@ export function ChatPanel() {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading}
+                disabled={isLoading || !hasSelectedSources}
               >
                 <Mic className="h-4 w-4" />
               </Button>
@@ -571,8 +617,10 @@ export function ChatPanel() {
                 type="submit"
                 size="sm"
                 variant="brand"
-                className="h-8 w-8 p-0 lux-gradient text-white shadow-lg hover:shadow-xl transition-all duration-200"
-                disabled={!inputValue.trim() || isLoading}
+                className="h-8 w-8 p-0 bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                disabled={
+                  !inputValue.trim() || isLoading || !hasSelectedSources
+                }
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -585,10 +633,24 @@ export function ChatPanel() {
                 Press Enter to send, Shift+Enter for new line
               </span>
               <span className="sm:hidden">Enter to send</span>
-              {selectedSources.length > 0 && (
+              {!hasAvailableSources ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-300"
+                >
+                  No sources available
+                </Badge>
+              ) : !hasSelectedSources ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300"
+                >
+                  Select sources to chat
+                </Badge>
+              ) : (
                 <Badge variant="outline" className="text-xs">
                   <span className="hidden sm:inline">Vector search: </span>
-                  {selectedSources.length} sources
+                  {selectedSourceIds.length} sources
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs capitalize">

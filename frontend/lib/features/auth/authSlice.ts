@@ -64,7 +64,7 @@ export const checkAuth = createAsyncThunk(
     }
 
     const response = await authApi.checkAuth();
-    return response.user;
+    return response.user || null;
   }
 );
 

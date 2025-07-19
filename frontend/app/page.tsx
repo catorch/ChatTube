@@ -1,5 +1,10 @@
-import { MainLayout } from "@/components/layout/main-layout";
+import { WelcomePage } from "@/components/welcome/welcome-page";
+import { WelcomeLayout } from "@/components/layout/welcome-layout";
 
 export default function Home() {
-  return <MainLayout />;
+  return (
+    <WelcomeLayout>
+      <WelcomePage />
+    </WelcomeLayout>
+  );
 }

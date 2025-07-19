@@ -5,7 +5,7 @@ import {
   SourceCreateRequest,
   SourcesResponse,
 } from "../../api/services/sources";
-import { resetStore } from "../../store";
+import { resetStore } from "../../types";
 
 // Updated Source interface for frontend
 export interface FrontendSource {

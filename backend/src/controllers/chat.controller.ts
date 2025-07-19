@@ -145,8 +145,9 @@ export async function sendMessage(req: Request, res: Response) {
 
   try {
     // Verify chat belongs to user and populate sources
-    const chat = await Chat.findOne({ _id: chatId, userId })
-                           .populate('sourceIds');
+    const chat = await Chat.findOne({ _id: chatId, userId }).populate(
+      "sourceIds"
+    );
     if (!chat) {
       return res
         .status(404)
@@ -156,8 +157,9 @@ export async function sendMessage(req: Request, res: Response) {
     // Require sources before allowing messages
     if (!chat.sourceIds.length) {
       return res.status(400).json({
-        status: 'ERROR',
-        message: 'This chat has no sources yet. Add at least one source to start chatting.'
+        status: "ERROR",
+        message:
+          "This chat has no sources yet. Add at least one source to start chatting.",
       });
     }
 
@@ -233,8 +235,9 @@ export async function streamMessage(req: Request, res: Response) {
 
   try {
     // Verify chat belongs to user and populate sources
-    const chat = await Chat.findOne({ _id: chatId, userId })
-                           .populate('sourceIds');
+    const chat = await Chat.findOne({ _id: chatId, userId }).populate(
+      "sourceIds"
+    );
     if (!chat) {
       return res
         .status(404)
@@ -244,8 +247,9 @@ export async function streamMessage(req: Request, res: Response) {
     // Require sources before allowing messages
     if (!chat.sourceIds.length) {
       return res.status(400).json({
-        status: 'ERROR',
-        message: 'This chat has no sources yet. Add at least one source to start chatting.'
+        status: "ERROR",
+        message:
+          "This chat has no sources yet. Add at least one source to start chatting.",
       });
     }
 
@@ -379,7 +383,9 @@ async function getRelevantChunks(
     // Only add source filter if sourceIds array has content
     if (sourceIds && sourceIds.length > 0) {
       // Convert string IDs to ObjectIds
-      const objectIds = sourceIds.map((id: string) => new mongoose.Types.ObjectId(id));
+      const objectIds = sourceIds.map(
+        (id: string) => new mongoose.Types.ObjectId(id)
+      );
       vectorSearchStage.$vectorSearch.filter = {
         sourceId: { $in: objectIds },
       };
@@ -440,25 +446,35 @@ async function generateAIResponse(
     // Build context from relevant chunks with timestamps for AV content
     const context = relevantChunks
       .map((chunk, index) => {
-        let contextInfo = `[Segment ${index + 1}] From ${chunk.source.kind} source "${chunk.source.title || 'Untitled'}"`;
-        
+        let contextInfo = `[Segment ${index + 1}] From ${
+          chunk.source.kind
+        } source "${chunk.source.title || "Untitled"}"`;
+
         // Add timestamp info for YouTube content
-        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
           const timestampFormatted = formatTimestamp(chunk.startTime);
-          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          const videoId =
+            chunk.source.metadata?.videoId ||
+            chunk.source.url?.split("v=")[1]?.split("&")[0];
           if (videoId) {
-            const youtubeUrl = createYouTubeTimestampUrl(videoId, chunk.startTime);
+            const youtubeUrl = createYouTubeTimestampUrl(
+              videoId,
+              chunk.startTime
+            );
             contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
           }
         }
-        
+
         contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
-        
+
         // Add confidence info if available
         if (chunk.metadata?.noSpeechProb !== undefined) {
-          contextInfo += ` - Confidence: ${((1 - chunk.metadata.noSpeechProb) * 100).toFixed(1)}%`;
+          contextInfo += ` - Confidence: ${(
+            (1 - chunk.metadata.noSpeechProb) *
+            100
+          ).toFixed(1)}%`;
         }
-        
+
         return `${contextInfo}: ${chunk.text}`;
       })
       .join("\n\n");
@@ -472,10 +488,14 @@ async function generateAIResponse(
     // Build reference examples from actual chunks
     const referenceExamples = relevantChunks
       .map((chunk, index) => {
-        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
-          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
+          const videoId =
+            chunk.source.metadata?.videoId ||
+            chunk.source.url?.split("v=")[1]?.split("&")[0];
           if (videoId) {
-            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(chunk.startTime)})`;
+            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(
+              chunk.startTime
+            )})`;
           }
         }
         return `[📄 ${index + 1}](source://${chunk.source._id})`;
@@ -536,12 +556,16 @@ Example reference format for this query:
       sourceId: chunk.source._id,
       chunkIds: [chunk._id],
       timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
-      timestampFormatted: chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : '',
-      youtubeUrl: chunk.source.kind === 'youtube' && chunk.startTime !== undefined ? 
-        createYouTubeTimestampUrl(
-          chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0],
-          chunk.startTime
-        ) : '',
+      timestampFormatted:
+        chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : "",
+      youtubeUrl:
+        chunk.source.kind === "youtube" && chunk.startTime !== undefined
+          ? createYouTubeTimestampUrl(
+              chunk.source.metadata?.videoId ||
+                chunk.source.url?.split("v=")[1]?.split("&")[0],
+              chunk.startTime
+            )
+          : "",
       relevanceScore: chunk.score,
       confidenceMetrics: {
         avgLogProb: chunk.metadata?.avgLogProb,
@@ -585,25 +609,35 @@ async function streamAIResponse(
     // Build context from relevant chunks with timestamps for AV content
     const context = relevantChunks
       .map((chunk, index) => {
-        let contextInfo = `[Segment ${index + 1}] From ${chunk.source.kind} source "${chunk.source.title || 'Untitled'}"`;
-        
+        let contextInfo = `[Segment ${index + 1}] From ${
+          chunk.source.kind
+        } source "${chunk.source.title || "Untitled"}"`;
+
         // Add timestamp info for YouTube content
-        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
+        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
           const timestampFormatted = formatTimestamp(chunk.startTime);
-          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+          const videoId =
+            chunk.source.metadata?.videoId ||
+            chunk.source.url?.split("v=")[1]?.split("&")[0];
           if (videoId) {
-            const youtubeUrl = createYouTubeTimestampUrl(videoId, chunk.startTime);
+            const youtubeUrl = createYouTubeTimestampUrl(
+              videoId,
+              chunk.startTime
+            );
             contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
           }
         }
-        
+
         contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
-        
+
         // Add confidence info if available
         if (chunk.metadata?.noSpeechProb !== undefined) {
-          contextInfo += ` - Confidence: ${((1 - chunk.metadata.noSpeechProb) * 100).toFixed(1)}%`;
+          contextInfo += ` - Confidence: ${(
+            (1 - chunk.metadata.noSpeechProb) *
+            100
+          ).toFixed(1)}%`;
         }
-        
+
         return `${contextInfo}: ${chunk.text}`;
       })
       .join("\n\n");
@@ -617,10 +651,14 @@ async function streamAIResponse(
     // Build reference examples from actual chunks
     const referenceExamples = relevantChunks
       .map((chunk, index) => {
-        if (chunk.source.kind === 'youtube' && chunk.startTime !== undefined) {
-          const videoId = chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0];
+        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
+          const videoId =
+            chunk.source.metadata?.videoId ||
+            chunk.source.url?.split("v=")[1]?.split("&")[0];
           if (videoId) {
-            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(chunk.startTime)})`;
+            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(
+              chunk.startTime
+            )})`;
           }
         }
         return `[📄 ${index + 1}](source://${chunk.source._id})`;
@@ -703,12 +741,16 @@ Example reference format for this query:
       sourceId: chunk.source._id,
       chunkIds: [chunk._id],
       timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
-      timestampFormatted: chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : '',
-      youtubeUrl: chunk.source.kind === 'youtube' && chunk.startTime !== undefined ? 
-        createYouTubeTimestampUrl(
-          chunk.source.metadata?.videoId || chunk.source.url?.split('v=')[1]?.split('&')[0],
-          chunk.startTime
-        ) : '',
+      timestampFormatted:
+        chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : "",
+      youtubeUrl:
+        chunk.source.kind === "youtube" && chunk.startTime !== undefined
+          ? createYouTubeTimestampUrl(
+              chunk.source.metadata?.videoId ||
+                chunk.source.url?.split("v=")[1]?.split("&")[0],
+              chunk.startTime
+            )
+          : "",
       relevanceScore: chunk.score,
       confidenceMetrics: {
         avgLogProb: chunk.metadata?.avgLogProb,

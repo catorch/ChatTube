@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +11,11 @@ import {
   loadChatList,
   deleteChat,
   renameChatTitle,
+  clearMessages,
+  setCurrentChatId,
 } from "@/lib/features/chat/chatSlice";
 import { showAuthModal } from "@/lib/features/auth/authSlice";
+import { chatApi } from "@/lib/api/services/chat";
 import {
   Plus,
   Search,
@@ -67,19 +71,10 @@ type SortBy = "date" | "title" | "messages";
 type SortOrder = "asc" | "desc";
 type ViewMode = "grid" | "list";
 
-interface WelcomePageProps {
-  onCreateNewChat?: () => void;
-  onChatClick?: (chatId: string) => void;
-  onRenameChat?: (chatId: string, newTitle: string) => void;
-  onDeleteChat?: (chatId: string) => void;
-}
+interface WelcomePageProps {}
 
-export function WelcomePage({
-  onCreateNewChat,
-  onChatClick,
-  onRenameChat,
-  onDeleteChat,
-}: WelcomePageProps) {
+export function WelcomePage({}: WelcomePageProps = {}) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { chatList, chatListLoading, chatListError } = useAppSelector(
     (state) => state.chat
@@ -141,20 +136,22 @@ export function WelcomePage({
     setCurrentPage(1);
   }, [searchQuery, sortBy, sortOrder]);
 
-  const handleCreateNewChat = () => {
-    if (onCreateNewChat) {
-      onCreateNewChat();
-    } else {
-      console.log("Creating new chat...");
+  const handleCreateNewChat = async () => {
+    try {
+      // Create new chat via API
+      const response = await chatApi.createChat();
+      const newChatId = response.chat._id;
+
+      // Navigate to the new chat
+      router.push(`/chat/${newChatId}`);
+    } catch (error) {
+      console.error("Failed to create new chat:", error);
     }
   };
 
   const handleChatClick = (chatId: string) => {
-    if (onChatClick) {
-      onChatClick(chatId);
-    } else {
-      console.log("Opening chat:", chatId);
-    }
+    // Navigate to the specific chat
+    router.push(`/chat/${chatId}`);
   };
 
   const handleRenameStart = (chatId: string, currentTitle: string) => {
@@ -167,9 +164,6 @@ export function WelcomePage({
       dispatch(
         renameChatTitle({ chatId: editingChatId, title: editingTitle.trim() })
       );
-      if (onRenameChat) {
-        onRenameChat(editingChatId, editingTitle.trim());
-      }
     }
     setEditingChatId(null);
     setEditingTitle("");
@@ -188,9 +182,6 @@ export function WelcomePage({
   const handleDeleteConfirm = () => {
     if (chatToDelete) {
       dispatch(deleteChat(chatToDelete));
-      if (onDeleteChat) {
-        onDeleteChat(chatToDelete);
-      }
     }
     setDeleteDialogOpen(false);
     setChatToDelete(null);
@@ -448,7 +439,9 @@ export function WelcomePage({
                               variant="ghost"
                               size="sm"
                               onClick={() =>
-                                setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                                setSortOrder(
+                                  sortOrder === "asc" ? "desc" : "asc"
+                                )
                               }
                               className="rounded-lg hover-lift"
                             >
@@ -505,12 +498,12 @@ export function WelcomePage({
                           </tr>
                         </thead>
 
-                                                 {/* Table Body */}
-                         <tbody>
-                           {paginatedChats.map((chat, index) => (
+                        {/* Table Body */}
+                        <tbody>
+                          {paginatedChats.map((chat, index) => (
                             <tr
                               key={chat.id}
-                                                             className={`
+                              className={`
                                  group border-t border-border hover:bg-muted/50 cursor-pointer transition-colors
                                  ${
                                    index === paginatedChats.length - 1
@@ -635,8 +628,8 @@ export function WelcomePage({
                     ) : (
                       // Grid Layout (Legacy support)
                       <div className="p-6">
-                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                           {paginatedChats.map((chat) => (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {paginatedChats.map((chat) => (
                             <div
                               key={chat.id}
                               className="group card-soft p-6 aspect-square flex flex-col justify-between cursor-pointer hover-lift"
@@ -746,93 +739,102 @@ export function WelcomePage({
                             </div>
                           ))}
                         </div>
-                                             </div>
-                     )}
+                      </div>
+                    )}
 
-                     {/* Pagination Controls */}
-                     {totalPages > 1 && (
-                       <div className="p-4 border-t border-border bg-surface-1/50">
-                         <div className="flex items-center justify-between">
-                           <div className="text-sm text-muted-foreground">
-                             Showing {startIndex + 1} to {Math.min(endIndex, totalChats)} of {totalChats} conversations
-                           </div>
-                           <div className="flex items-center gap-2">
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => setCurrentPage(1)}
-                               disabled={currentPage === 1}
-                               className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
-                             >
-                               <ChevronsLeft className="h-4 w-4" />
-                             </Button>
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => setCurrentPage(currentPage - 1)}
-                               disabled={currentPage === 1}
-                               className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
-                             >
-                               <ChevronLeft className="h-4 w-4" />
-                             </Button>
-                             
-                             {/* Page Numbers */}
-                             <div className="flex items-center gap-1">
-                               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                 let pageNumber;
-                                 if (totalPages <= 5) {
-                                   pageNumber = i + 1;
-                                 } else if (currentPage <= 3) {
-                                   pageNumber = i + 1;
-                                 } else if (currentPage >= totalPages - 2) {
-                                   pageNumber = totalPages - 4 + i;
-                                 } else {
-                                   pageNumber = currentPage - 2 + i;
-                                 }
-                                 
-                                 return (
-                                   <Button
-                                     key={pageNumber}
-                                     variant={currentPage === pageNumber ? "default" : "outline"}
-                                     size="sm"
-                                     onClick={() => setCurrentPage(pageNumber)}
-                                     className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
-                                   >
-                                     {pageNumber}
-                                   </Button>
-                                 );
-                               })}
-                             </div>
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="p-4 border-t border-border bg-surface-1/50">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {startIndex + 1} to{" "}
+                            {Math.min(endIndex, totalChats)} of {totalChats}{" "}
+                            conversations
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(1)}
+                              disabled={currentPage === 1}
+                              className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
+                            >
+                              <ChevronsLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
 
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => setCurrentPage(currentPage + 1)}
-                               disabled={currentPage === totalPages}
-                               className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
-                             >
-                               <ChevronRight className="h-4 w-4" />
-                             </Button>
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => setCurrentPage(totalPages)}
-                               disabled={currentPage === totalPages}
-                               className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
-                             >
-                               <ChevronsRight className="h-4 w-4" />
-                             </Button>
-                           </div>
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 )}
-               </div>
-             </div>
-           </>
-         )}
-       </div>
+                            {/* Page Numbers */}
+                            <div className="flex items-center gap-1">
+                              {Array.from(
+                                { length: Math.min(5, totalPages) },
+                                (_, i) => {
+                                  let pageNumber;
+                                  if (totalPages <= 5) {
+                                    pageNumber = i + 1;
+                                  } else if (currentPage <= 3) {
+                                    pageNumber = i + 1;
+                                  } else if (currentPage >= totalPages - 2) {
+                                    pageNumber = totalPages - 4 + i;
+                                  } else {
+                                    pageNumber = currentPage - 2 + i;
+                                  }
+
+                                  return (
+                                    <Button
+                                      key={pageNumber}
+                                      variant={
+                                        currentPage === pageNumber
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      size="sm"
+                                      onClick={() => setCurrentPage(pageNumber)}
+                                      className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
+                                    >
+                                      {pageNumber}
+                                    </Button>
+                                  );
+                                }
+                              )}
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(totalPages)}
+                              disabled={currentPage === totalPages}
+                              className="h-8 w-8 p-0 rounded-lg border-border/50 hover:bg-background/80"
+                            >
+                              <ChevronsRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Enhanced Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

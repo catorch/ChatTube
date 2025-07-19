@@ -1,18 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { logout } from "@/lib/features/auth/authSlice";
-import {
-  clearMessages,
-  setCurrentChatId,
-  setCurrentInput,
-  loadChatMessages,
-} from "@/lib/features/chat/chatSlice";
 import { clearStoreAndPersist } from "@/lib/store";
 import { SourcesPanel } from "./sources-panel";
 import ChatPanel from "./chat-panel";
-import { WelcomePage } from "@/components/welcome/welcome-page";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,56 +17,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Settings,
-  User,
-  Menu,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  ArrowLeft,
-  LogOut,
-  UserCircle,
-} from "lucide-react";
-import { UserInfo } from "@/components/auth/user-info";
+import { Settings, Menu, X, ArrowLeft, LogOut, UserCircle } from "lucide-react";
 
-export function MainLayout() {
+interface ChatLayoutProps {
+  chatId: string;
+}
+
+export function ChatLayout({ chatId }: ChatLayoutProps) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
   const [isMobileSourcesOpen, setIsMobileSourcesOpen] = useState(false);
   const [isSourcesPanelCollapsed, setIsSourcesPanelCollapsed] = useState(false);
-  const [currentView, setCurrentView] = useState<"welcome" | "chat">("welcome");
 
-  const handleCreateNewChat = () => {
-    // Clear current chat state to ensure a fresh chat
-    dispatch(clearMessages());
-    dispatch(setCurrentChatId(null));
-    dispatch(setCurrentInput(""));
-
-    // Switch to chat view - ChatPanel will create a new chat automatically
-    setCurrentView("chat");
-  };
-
-  const handleChatClick = async (chatId: string) => {
-    try {
-      // Load the specific chat and its messages
-      await dispatch(loadChatMessages(chatId)).unwrap();
-
-      // Switch to chat view
-      setCurrentView("chat");
-    } catch (error) {
-      console.error("Failed to load chat:", error);
-      // Still switch to chat view even if loading fails
-      setCurrentView("chat");
-    }
-  };
-
-  const handleRenameChat = (chatId: string, newTitle: string) => {
-    // Optional: Add any additional UI logic here
-  };
-
-  const handleDeleteChat = (chatId: string) => {
-    // Optional: Add any additional UI logic here
+  const handleBackToHome = () => {
+    router.push("/");
   };
 
   const handleLogout = async () => {
@@ -85,6 +44,8 @@ export function MainLayout() {
     } finally {
       // Always clear the store and persisted data
       await clearStoreAndPersist();
+      // Redirect to home after logout
+      router.push("/");
     }
   };
 
@@ -119,32 +80,28 @@ export function MainLayout() {
       {/* Enhanced Glassmorphic Top Bar */}
       <header className="sticky top-0 z-30 glass-effect h-14 sm:h-14 flex items-center justify-between px-4 sm:px-6 transition-all duration-200">
         <div className="flex items-center gap-3">
-          {currentView === "chat" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="sm:hidden h-8 w-8 p-0"
+            onClick={() => setIsMobileSourcesOpen(!isMobileSourcesOpen)}
+          >
+            {isMobileSourcesOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Menu className="h-4 w-4" />
+            )}
+          </Button>
+
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
-              className="sm:hidden h-8 w-8 p-0"
-              onClick={() => setIsMobileSourcesOpen(!isMobileSourcesOpen)}
+              onClick={handleBackToHome}
+              className="h-8 w-8 p-0 mr-2"
             >
-              {isMobileSourcesOpen ? (
-                <X className="h-4 w-4" />
-              ) : (
-                <Menu className="h-4 w-4" />
-              )}
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-          )}
-
-          <div className="flex items-center gap-3">
-            {currentView === "chat" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentView("welcome")}
-                className="h-8 w-8 p-0 mr-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
             <div className="w-8 h-8 sm:w-9 sm:h-9 lux-gradient rounded-xl shadow-[var(--elev-2)] flex items-center justify-center">
               <span className="text-white font-bold text-xs sm:text-sm relative z-10">
                 CT
@@ -200,47 +157,27 @@ export function MainLayout() {
                   onClick={handleLogout}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
+                  <span>Logout</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <User className="h-4 w-4" />
-            </Button>
-          )}
+          ) : null}
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Desktop Sources Panel - Hidden on welcome page */}
-        {currentView === "chat" && (
-          <div className="hidden sm:block relative">
-            <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
-            {/* Collapse Toggle Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-4 -right-4 z-10 h-8 w-8 p-0 bg-card border border-border rounded-full shadow-md hover:shadow-lg"
-              onClick={() =>
-                setIsSourcesPanelCollapsed(!isSourcesPanelCollapsed)
-              }
-              title={
-                isSourcesPanelCollapsed ? "Expand sources" : "Collapse sources"
-              }
-            >
-              {isSourcesPanelCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        )}
+      {/* Main Chat Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sources Panel */}
+        <div
+          className={`${
+            isSourcesPanelCollapsed ? "w-0" : "w-80"
+          } transition-all duration-300 hidden sm:flex flex-col`}
+        >
+          <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
+        </div>
 
-        {/* Mobile Sources Panel Overlay - Hidden on welcome page */}
-        {currentView === "chat" && isMobileSourcesOpen && (
+        {/* Mobile Sources Panel Overlay */}
+        {isMobileSourcesOpen && (
           <>
             <div
               className="fixed inset-0 bg-black/50 z-40 sm:hidden backdrop-blur-sm"
@@ -252,17 +189,9 @@ export function MainLayout() {
           </>
         )}
 
+        {/* Chat Panel */}
         <div className="flex-1 flex flex-col">
-          {currentView === "welcome" ? (
-            <WelcomePage
-              onCreateNewChat={handleCreateNewChat}
-              onChatClick={handleChatClick}
-              onRenameChat={handleRenameChat}
-              onDeleteChat={handleDeleteChat}
-            />
-          ) : (
-            <ChatPanel />
-          )}
+          <ChatPanel />
         </div>
       </div>
     </div>

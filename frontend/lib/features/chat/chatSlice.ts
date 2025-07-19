@@ -6,7 +6,7 @@ import {
   StreamEvent,
   Chat as ApiChat,
 } from "../../api/services/chat";
-import { resetStore } from "../../store";
+import { resetStore } from "../../types";
 
 export interface Message {
   id: string;

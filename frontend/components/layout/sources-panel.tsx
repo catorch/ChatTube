@@ -11,7 +11,7 @@ import {
   makeSelectProcessingCount,
   makeSelectCompletedCount,
 } from "@/lib/features/sources/selectors";
-import { FrontendSource } from "@/lib/features/sources/sourcesSlice";
+import { FrontendSource } from "@/lib/api/types";
 import {
   toggleSourceSelection,
   selectAllSources,

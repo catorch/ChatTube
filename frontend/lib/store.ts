@@ -2,7 +2,6 @@ import { configureStore } from "@reduxjs/toolkit";
 import { persistStore, persistReducer, createTransform } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import authReducer from "./features/auth/authSlice";
-import sourcesReducer from "./features/sources/sourcesSlice";
 import chatReducer from "./features/chat/chatSlice";
 import { resetStore } from "./types";
 import { api } from "./api/base";
@@ -25,7 +24,7 @@ const persistConfig = {
   key: "chattube-root",
   storage,
   // Only persist essential data, exclude loading states and errors
-  whitelist: ["auth", "sources", "chat"],
+  whitelist: ["auth", "chat"],
   transforms: [dateTransform],
 };
 
@@ -34,14 +33,6 @@ const authPersistConfig = {
   key: "auth",
   storage,
   blacklist: ["isLoading", "error", "showAuthModal"],
-  transforms: [dateTransform],
-};
-
-// Sources slice persist config - exclude loading states
-const sourcesPersistConfig = {
-  key: "sources",
-  storage,
-  blacklist: ["isLoading", "error"],
   transforms: [dateTransform],
 };
 
@@ -55,16 +46,11 @@ const chatPersistConfig = {
 
 // Create persisted reducers
 const persistedAuthReducer = persistReducer(authPersistConfig, authReducer);
-const persistedSourcesReducer = persistReducer(
-  sourcesPersistConfig,
-  sourcesReducer
-);
 const persistedChatReducer = persistReducer(chatPersistConfig, chatReducer);
 
 export const store = configureStore({
   reducer: {
     auth: persistedAuthReducer,
-    sources: persistedSourcesReducer,
     chat: persistedChatReducer,
     [api.reducerPath]: api.reducer,
   },
@@ -98,7 +84,6 @@ export const clearStoreAndPersist = async () => {
   try {
     await storage.removeItem("persist:chattube-root");
     await storage.removeItem("persist:auth");
-    await storage.removeItem("persist:sources");
     await storage.removeItem("persist:chat");
   } catch (error) {
     console.warn("Error clearing storage:", error);

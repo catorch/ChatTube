@@ -1,5 +1,5 @@
 import { api } from "../base";
-import { FrontendSource } from "../../features/sources/sourcesSlice";
+import { FrontendSource } from "../types";
 
 // Keep existing types for compatibility
 export interface Source {

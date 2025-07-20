@@ -144,3 +144,25 @@ export interface AuthCheckResponse {
   isAuthenticated: boolean;
   user?: User;
 }
+
+// Frontend Source interface for UI components
+export interface FrontendSource {
+  id: string;
+  chatId: string;
+  kind: "youtube" | "pdf" | "web" | "file";
+  title: string;
+  url?: string;
+  thumbnail?: string;
+  description?: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  lastUpdated: string;
+  metadata: {
+    processingStatus?: string;
+    errorMessage?: string;
+    videoId?: string;
+    channelName?: string;
+    duration?: number;
+    chunksCount?: number;
+    [key: string]: any;
+  };
+}

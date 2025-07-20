@@ -11,6 +11,7 @@ interface ChatBubbleProps {
   className?: string;
   timestamp?: Date;
   sources?: string[];
+  citationMap?: Record<string, any>;
 }
 
 export function ChatBubble({
@@ -20,6 +21,7 @@ export function ChatBubble({
   className,
   timestamp,
   sources,
+  citationMap,
 }: ChatBubbleProps) {
   return (
     <motion.div
@@ -56,6 +58,7 @@ export function ChatBubble({
           isUser={isUser}
           isStreaming={isStreaming}
           className={isUser ? "text-white" : ""}
+          citationMap={citationMap}
         />
 
         {/* Streaming indicator with gradient reveal */}

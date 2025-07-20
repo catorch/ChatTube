@@ -609,6 +609,7 @@ export default function ChatPanel() {
                               isUser={message.isUser}
                               isStreaming={message.isStreaming}
                               className={message.isUser ? "text-white" : ""}
+                              citationMap={message.metadata?.citationMap}
                             />
                           </div>
 

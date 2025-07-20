@@ -42,6 +42,14 @@ export const signup = createAsyncThunk(
   }
 );
 
+export const loginWithGoogle = createAsyncThunk(
+  "auth/loginWithGoogle",
+  async (data: { token: string }) => {
+    const response = await authApi.loginWithGoogle(data);
+    return { user: response.user, token: response.token };
+  }
+);
+
 export const logout = createAsyncThunk("auth/logout", async () => {
   // Redux-persist will handle clearing the token from storage
   // Just call the API logout for any server-side cleanup
@@ -137,6 +145,24 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(login.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || "Login failed";
+      })
+
+      // Google Login
+      .addCase(loginWithGoogle.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loginWithGoogle.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token || null;
+        state.isAuthenticated = true;
+        state.showAuthModal = false;
+        state.error = null;
+      })
+      .addCase(loginWithGoogle.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message || "Login failed";
       })

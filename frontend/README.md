@@ -1,5 +1,15 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Create a `.env.local` file with the following variable:
+
+```
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id
+```
+
+The backend also expects a matching `GOOGLE_CLIENT_ID` variable.
+
 ## Getting Started
 
 First, run the development server:

@@ -7,11 +7,13 @@ import {
   signup,
   hideAuthModal,
   switchAuthMode,
+  loginWithGoogle,
 } from "@/lib/features/auth/authSlice";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoogleLogin } from "@react-oauth/google";
 
 export function AuthModal() {
   const dispatch = useAppDispatch();
@@ -164,14 +166,24 @@ export function AuthModal() {
             </div>
           )}
 
-          <Button type="submit" disabled={isLoading} className="w-full">
-            {isLoading
-              ? "Loading..."
-              : authModalMode === "login"
-              ? "Sign In"
-              : "Create Account"}
-          </Button>
-        </form>
+        <Button type="submit" disabled={isLoading} className="w-full">
+          {isLoading
+            ? "Loading..."
+            : authModalMode === "login"
+            ? "Sign In"
+            : "Create Account"}
+        </Button>
+        <div className="flex justify-center mt-4">
+          <GoogleLogin
+            onSuccess={(cred) => {
+              if (cred.credential) {
+                dispatch(loginWithGoogle({ token: cred.credential }));
+              }
+            }}
+            onError={() => console.log("Google Login Failed")}
+          />
+        </div>
+      </form>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600 dark:text-gray-400">

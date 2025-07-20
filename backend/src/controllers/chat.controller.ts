@@ -9,6 +9,8 @@ import {
   formatTimestamp,
   createYouTubeTimestampUrl,
 } from "../utils/timestampUtils";
+import { buildCitations } from "../utils/citationUtils";
+import { createChatPrompt } from "../prompts/chatPrompt";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -217,7 +219,7 @@ export async function sendMessage(req: Request, res: Response) {
       role: "assistant",
       content: aiResponse.content,
       metadata: {
-        sourceReferences: aiResponse.sourceReferences,
+        citationMap: aiResponse.citationMap,
         model: aiResponse.model,
         tokenCount: aiResponse.tokenCount,
       },
@@ -527,41 +529,9 @@ async function generateAIResponse(
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Build context from relevant chunks with timestamps for AV content
-    const context = relevantChunks
-      .map((chunk, index) => {
-        let contextInfo = `[Segment ${index + 1}] From ${
-          chunk.source.kind
-        } source "${chunk.source.title || "Untitled"}"`;
-
-        // Add timestamp info for YouTube content
-        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
-          const timestampFormatted = formatTimestamp(chunk.startTime);
-          const videoId =
-            chunk.source.metadata?.videoId ||
-            chunk.source.url?.split("v=")[1]?.split("&")[0];
-          if (videoId) {
-            const youtubeUrl = createYouTubeTimestampUrl(
-              videoId,
-              chunk.startTime
-            );
-            contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
-          }
-        }
-
-        contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
-
-        // Add confidence info if available
-        if (chunk.metadata?.noSpeechProb !== undefined) {
-          contextInfo += ` - Confidence: ${(
-            (1 - chunk.metadata.noSpeechProb) *
-            100
-          ).toFixed(1)}%`;
-        }
-
-        return `${contextInfo}: ${chunk.text}`;
-      })
-      .join("\n\n");
+    // Build context from relevant chunks using new utility
+    const { contextLines, citationInfos } = buildCitations(relevantChunks);
+    const context = contextLines.join("\n\n");
 
     // Build conversation history
     const conversationHistory = recentMessages.reverse().map((msg: any) => ({
@@ -569,47 +539,14 @@ async function generateAIResponse(
       content: msg.content,
     }));
 
-    // Build reference examples from actual chunks
-    const referenceExamples = relevantChunks
-      .map((chunk, index) => {
-        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
-          const videoId =
-            chunk.source.metadata?.videoId ||
-            chunk.source.url?.split("v=")[1]?.split("&")[0];
-          if (videoId) {
-            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(
-              chunk.startTime
-            )})`;
-          }
-        }
-        return `[📄 ${index + 1}](source://${chunk.source._id})`;
-      })
+    // Build reference examples from citation infos
+    const referenceExamples = citationInfos
       .slice(0, 2)
+      .map((ci) => ci.display)
       .join(" and ");
 
-    // Create enhanced system prompt
-    const systemPrompt = `You are a helpful AI assistant that answers questions about YouTube videos using the provided context from video transcripts.
-
-Context from relevant video segments:
-${context}
-
-Instructions:
-- Answer the user's question based on the provided video context from precise Whisper transcription segments
-- When referencing specific video segments, use this EXACT format for clickable video references:
-  [📺 X](video://VIDEO_ID/TIMESTAMP_IN_SECONDS)
-  Where X is just the segment number (1, 2, 3, etc.), VIDEO_ID is the YouTube video ID, and TIMESTAMP_IN_SECONDS is the start time in seconds
-- For example: [📺 2](video://dQw4w9WgXcQ/84) for a reference at 1:24
-- Always include the video emoji (📺) and just the number for clean, minimal references
-- You can also mention the formatted timestamp in text for clarity: "at 14:31" or "(14:31)"
-- Include relevance scores and transcription confidence when citing sources
-- If the context doesn't contain sufficient information, acknowledge this limitation
-- Be concise but informative in your responses
-- When referencing multiple videos, distinguish between them clearly
-- Use the precise timestamps provided rather than approximate times
-- If asked about topics not covered in the context, suggest what additional videos might be helpful
-
-Example reference format for this query:
-"The video discusses topics at ${referenceExamples}."`;
+    // Create enhanced system prompt using new utility
+    const systemPrompt = createChatPrompt(context, referenceExamples);
 
     const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },
@@ -635,32 +572,22 @@ Example reference format for this query:
 
     const content = responseContent;
 
-    // Prepare source references with precise timestamps and confidence metrics
-    const sourceReferences = relevantChunks.map((chunk) => ({
-      sourceId: chunk.source._id,
-      chunkIds: [chunk._id],
-      timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
-      timestampFormatted:
-        chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : "",
-      youtubeUrl:
-        chunk.source.kind === "youtube" && chunk.startTime !== undefined
-          ? createYouTubeTimestampUrl(
-              chunk.source.metadata?.videoId ||
-                chunk.source.url?.split("v=")[1]?.split("&")[0],
-              chunk.startTime
-            )
-          : "",
-      relevanceScore: chunk.score,
-      confidenceMetrics: {
-        avgLogProb: chunk.metadata?.avgLogProb,
-        noSpeechProb: chunk.metadata?.noSpeechProb,
-        compressionRatio: chunk.metadata?.compressionRatio,
-      },
-    }));
+    // Prepare citation map for frontend tooltips
+    const citationMap = Object.fromEntries(
+      citationInfos.map((ci) => [
+        ci.label,
+        {
+          sourceId: ci.chunk.source._id,
+          chunkId: ci.chunk._id,
+          text: ci.chunk.text,
+          startTime: ci.chunk.startTime,
+        },
+      ])
+    );
 
     return {
       content,
-      sourceReferences,
+      citationMap,
       tokenCount: responseContent.length, // Estimate token count
       model: provider || "openai",
     };
@@ -668,7 +595,7 @@ Example reference format for this query:
     console.error("Error generating AI response:", error);
     return {
       content: "Sorry, I encountered an error while processing your request.",
-      sourceReferences: [],
+      citationMap: {},
       tokenCount: 0,
       model: "unknown",
     };
@@ -690,41 +617,9 @@ async function streamAIResponse(
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Build context from relevant chunks with timestamps for AV content
-    const context = relevantChunks
-      .map((chunk, index) => {
-        let contextInfo = `[Segment ${index + 1}] From ${
-          chunk.source.kind
-        } source "${chunk.source.title || "Untitled"}"`;
-
-        // Add timestamp info for YouTube content
-        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
-          const timestampFormatted = formatTimestamp(chunk.startTime);
-          const videoId =
-            chunk.source.metadata?.videoId ||
-            chunk.source.url?.split("v=")[1]?.split("&")[0];
-          if (videoId) {
-            const youtubeUrl = createYouTubeTimestampUrl(
-              videoId,
-              chunk.startTime
-            );
-            contextInfo += ` at ${timestampFormatted} (${youtubeUrl})`;
-          }
-        }
-
-        contextInfo += ` - Relevance: ${(chunk.score * 100).toFixed(1)}%`;
-
-        // Add confidence info if available
-        if (chunk.metadata?.noSpeechProb !== undefined) {
-          contextInfo += ` - Confidence: ${(
-            (1 - chunk.metadata.noSpeechProb) *
-            100
-          ).toFixed(1)}%`;
-        }
-
-        return `${contextInfo}: ${chunk.text}`;
-      })
-      .join("\n\n");
+    // Build context from relevant chunks using new utility
+    const { contextLines, citationInfos } = buildCitations(relevantChunks);
+    const context = contextLines.join("\n\n");
 
     // Build conversation history
     const conversationHistory = recentMessages.reverse().map((msg: any) => ({
@@ -732,47 +627,14 @@ async function streamAIResponse(
       content: msg.content,
     }));
 
-    // Build reference examples from actual chunks
-    const referenceExamples = relevantChunks
-      .map((chunk, index) => {
-        if (chunk.source.kind === "youtube" && chunk.startTime !== undefined) {
-          const videoId =
-            chunk.source.metadata?.videoId ||
-            chunk.source.url?.split("v=")[1]?.split("&")[0];
-          if (videoId) {
-            return `[📺 ${index + 1}](video://${videoId}/${Math.floor(
-              chunk.startTime
-            )})`;
-          }
-        }
-        return `[📄 ${index + 1}](source://${chunk.source._id})`;
-      })
+    // Build reference examples from citation infos
+    const referenceExamples = citationInfos
       .slice(0, 2)
+      .map((ci) => ci.display)
       .join(" and ");
 
-    // Create enhanced system prompt
-    const systemPrompt = `You are a helpful AI assistant that answers questions about YouTube videos using the provided context from video transcripts.
-
-Context from relevant video segments:
-${context}
-
-Instructions:
-- Answer the user's question based on the provided video context from precise Whisper transcription segments
-- When referencing specific video segments, use this EXACT format for clickable video references:
-  [📺 X](video://VIDEO_ID/TIMESTAMP_IN_SECONDS)
-  Where X is just the segment number (1, 2, 3, etc.), VIDEO_ID is the YouTube video ID, and TIMESTAMP_IN_SECONDS is the start time in seconds
-- For example: [📺 2](video://dQw4w9WgXcQ/84) for a reference at 1:24
-- Always include the video emoji (📺) and just the number for clean, minimal references
-- You can also mention the formatted timestamp in text for clarity: "at 14:31" or "(14:31)"
-- Include relevance scores and transcription confidence when citing sources
-- If the context doesn't contain sufficient information, acknowledge this limitation
-- Be concise but informative in your responses
-- When referencing multiple videos, distinguish between them clearly
-- Use the precise timestamps provided rather than approximate times
-- If asked about topics not covered in the context, suggest what additional videos might be helpful
-
-Example reference format for this query:
-"The video discusses topics at ${referenceExamples}."`;
+    // Create enhanced system prompt using new utility
+    const systemPrompt = createChatPrompt(context, referenceExamples);
 
     const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },
@@ -820,34 +682,24 @@ Example reference format for this query:
       }
     );
 
-    // Prepare source references
-    const sourceReferences = relevantChunks.map((chunk) => ({
-      sourceId: chunk.source._id,
-      chunkIds: [chunk._id],
-      timestamps: chunk.startTime !== undefined ? [chunk.startTime] : [],
-      timestampFormatted:
-        chunk.startTime !== undefined ? formatTimestamp(chunk.startTime) : "",
-      youtubeUrl:
-        chunk.source.kind === "youtube" && chunk.startTime !== undefined
-          ? createYouTubeTimestampUrl(
-              chunk.source.metadata?.videoId ||
-                chunk.source.url?.split("v=")[1]?.split("&")[0],
-              chunk.startTime
-            )
-          : "",
-      relevanceScore: chunk.score,
-      confidenceMetrics: {
-        avgLogProb: chunk.metadata?.avgLogProb,
-        noSpeechProb: chunk.metadata?.noSpeechProb,
-        compressionRatio: chunk.metadata?.compressionRatio,
-      },
-    }));
+    // Prepare citation map for frontend tooltips
+    const citationMap = Object.fromEntries(
+      citationInfos.map((ci) => [
+        ci.label,
+        {
+          sourceId: ci.chunk.source._id,
+          chunkId: ci.chunk._id,
+          text: ci.chunk.text,
+          startTime: ci.chunk.startTime,
+        },
+      ])
+    );
 
     // Update message with final content and metadata
     await Message.findByIdAndUpdate(tempAiMessage._id, {
       content: fullContent,
       metadata: {
-        sourceReferences,
+        citationMap,
         model: provider,
         tokenCount: fullContent.length,
       },
@@ -862,7 +714,7 @@ Example reference format for this query:
         type: "complete",
         message: finalMessage,
         messageId: tempAiMessage._id,
-        sourceReferences,
+        citationMap,
         model: provider,
         tokenCount: fullContent.length,
       })}\n\n`

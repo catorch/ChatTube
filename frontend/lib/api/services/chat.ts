@@ -45,6 +45,14 @@ export interface Message {
   content: string;
   metadata?: {
     videoReferences?: any[];
+    citationMap?: {
+      [label: string]: {
+        sourceId: string;
+        chunkId: string;
+        text: string;
+        startTime?: number;
+      };
+    };
     model?: string;
     tokenCount?: number;
   };
@@ -307,6 +315,14 @@ export interface StreamEvent {
   content?: string;
   chunks?: number;
   videoReferences?: any[];
+  citationMap?: {
+    [label: string]: {
+      sourceId: string;
+      chunkId: string;
+      text: string;
+      startTime?: number;
+    };
+  };
   model?: string;
   tokenCount?: number;
 }

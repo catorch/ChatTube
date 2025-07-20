@@ -15,7 +15,15 @@ export interface Message {
   timestamp: string;
   sources?: string[];
   metadata?: {
-    sourceReferences?: any[]; // Changed from videoReferences to sourceReferences
+    sourceReferences?: any[];
+    citationMap?: {
+      [label: string]: {
+        sourceId: string;
+        chunkId: string;
+        text: string;
+        startTime?: number;
+      };
+    };
     model?: string;
     tokenCount?: number;
   };
@@ -303,11 +311,20 @@ const chatSlice = createSlice({
                     timestamp: new Date().toISOString(),
                     metadata: {
                       sourceReferences: event.videoReferences,
+                      citationMap: event.citationMap,
                       model: event.model,
                       tokenCount: event.tokenCount,
                     },
                   } as Message)
-                : convertApiMessage(event.message as ApiMessage);
+                : {
+                    ...convertApiMessage(event.message as ApiMessage),
+                    metadata: {
+                      ...convertApiMessage(event.message as ApiMessage).metadata,
+                      citationMap: event.citationMap,
+                      model: event.model,
+                      tokenCount: event.tokenCount,
+                    },
+                  };
 
             const messageIndex = state.messages.findIndex(
               (m) => m.id === state.streamingMessageId

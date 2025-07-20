@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   loadChatList,
   deleteChat,
   renameChatTitle,
+  updateChatTitleOptimistic,
   clearMessages,
   setCurrentChatId,
 } from "@/lib/features/chat/chatSlice";
@@ -58,6 +58,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useDebouncedCallback } from "use-debounce";
 
 interface Chat {
   id: string;
@@ -154,16 +155,58 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     router.push(`/chat/${chatId}`);
   };
 
+  // Debounced function for optimistic updates (faster feedback)
+  const debouncedOptimisticUpdate = useDebouncedCallback(
+    (chatId: string, title: string, originalTitle: string) => {
+      if (title.trim() && title.trim() !== originalTitle) {
+        dispatch(
+          updateChatTitleOptimistic({
+            chatId,
+            title: title.trim(),
+          })
+        );
+      }
+    },
+    200 // 200ms delay for UI updates
+  );
+
+  // Debounced function to save title changes to API
+  const debouncedSaveTitle = useDebouncedCallback(
+    (chatId: string, title: string, originalTitle: string) => {
+      if (title.trim() && title.trim() !== originalTitle) {
+        dispatch(renameChatTitle({ chatId, title: title.trim() }));
+      }
+    },
+    1000 // 1 second delay for API calls
+  );
+
   const handleRenameStart = (chatId: string, currentTitle: string) => {
     setEditingChatId(chatId);
     setEditingTitle(currentTitle);
   };
 
+  const handleTitleChange = (newTitle: string, originalTitle: string) => {
+    // Only update local input state immediately for responsive typing
+    setEditingTitle(newTitle);
+
+    if (editingChatId) {
+      // Debounced optimistic update (200ms) for UI feedback
+      debouncedOptimisticUpdate(editingChatId, newTitle, originalTitle);
+
+      // Debounced API call (1000ms) to persist the change
+      debouncedSaveTitle(editingChatId, newTitle, originalTitle);
+    }
+  };
+
   const handleRenameConfirm = () => {
+    // Force immediate save and exit editing mode
     if (editingChatId && editingTitle.trim()) {
-      dispatch(
-        renameChatTitle({ chatId: editingChatId, title: editingTitle.trim() })
-      );
+      const currentChat = chatList.find((chat) => chat.id === editingChatId);
+      if (currentChat && editingTitle.trim() !== currentChat.title) {
+        dispatch(
+          renameChatTitle({ chatId: editingChatId, title: editingTitle.trim() })
+        );
+      }
     }
     setEditingChatId(null);
     setEditingTitle("");
@@ -326,7 +369,7 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                       Try Again
                     </Button>
                   </div>
-                ) : chatListLoading ? (
+                ) : chatListLoading && (!chatList || chatList.length === 0) ? (
                   <div className="text-center py-20">
                     <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-primary/10 animate-pulse">
                       <MessageCircle className="h-10 w-10 text-primary" />
@@ -517,9 +560,15 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                   <div className="flex items-center gap-3">
                                     <Input
                                       value={editingTitle}
-                                      onChange={(e) =>
-                                        setEditingTitle(e.target.value)
-                                      }
+                                      onChange={(e) => {
+                                        const currentChat = paginatedChats.find(
+                                          (c) => c.id === editingChatId
+                                        );
+                                        handleTitleChange(
+                                          e.target.value,
+                                          currentChat?.title || ""
+                                        );
+                                      }}
                                       className="flex-1 h-9 text-sm bg-background border-border/50 rounded-lg focus-lux"
                                       autoFocus
                                       onKeyDown={(e) => {
@@ -555,7 +604,12 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                     onClick={() => handleChatClick(chat.id)}
                                   >
                                     <div className="flex items-center justify-between">
-                                      <span className="line-clamp-1">
+                                      <span className="line-clamp-1 flex items-center gap-2">
+                                        {chat.emoji && (
+                                          <span className="text-lg">
+                                            {chat.emoji}
+                                          </span>
+                                        )}
                                         {chat.title}
                                       </span>
                                       <DropdownMenu>
@@ -638,9 +692,15 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                 <div className="flex items-center gap-3 flex-1">
                                   <Input
                                     value={editingTitle}
-                                    onChange={(e) =>
-                                      setEditingTitle(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                      const currentChat = paginatedChats.find(
+                                        (c) => c.id === editingChatId
+                                      );
+                                      handleTitleChange(
+                                        e.target.value,
+                                        currentChat?.title || ""
+                                      );
+                                    }}
                                     className="h-10 text-base font-medium bg-background/80 border-border/50 rounded-lg focus-lux"
                                     autoFocus
                                     onKeyDown={(e) => {
@@ -673,10 +733,17 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                   <div className="space-y-4">
                                     <div className="flex items-start justify-between w-full">
                                       <h3
-                                        className="font-medium text-lg line-clamp-2 text-foreground hover:text-primary transition-colors cursor-pointer leading-snug"
+                                        className="font-medium text-lg line-clamp-2 text-foreground hover:text-primary transition-colors cursor-pointer leading-snug flex items-start gap-2"
                                         onClick={() => handleChatClick(chat.id)}
                                       >
-                                        {chat.title}
+                                        {chat.emoji && (
+                                          <span className="text-xl flex-shrink-0 mt-0.5">
+                                            {chat.emoji}
+                                          </span>
+                                        )}
+                                        <span className="flex-1">
+                                          {chat.title}
+                                        </span>
                                       </h3>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>

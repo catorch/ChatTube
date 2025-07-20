@@ -313,19 +313,8 @@ export async function streamMessage(req: Request, res: Response) {
       })}\n\n`
     );
 
-    // Get relevant source chunks
-    // Use sourceIds from request if provided, otherwise use all chat sources
-    const sourceIdStrings =
-      sourceIds && sourceIds.length > 0
-        ? sourceIds // Frontend already sends string IDs
-        : chat.sourceIds.map((id: any) => {
-            // Handle both populated Source objects and ObjectIds for fallback
-            return typeof id === "object" && id._id
-              ? id._id.toString()
-              : id.toString();
-          });
-    const relevantChunks = await getRelevantChunks(content, sourceIdStrings);
-
+    const relevantChunks = await getRelevantChunks(content, sourceIds);
+    console.log(relevantChunks);
     // Send context event
     res.write(
       `data: ${JSON.stringify({
@@ -357,6 +346,51 @@ export async function streamMessage(req: Request, res: Response) {
       })}\n\n`
     );
     res.end();
+  }
+}
+
+// Update a chat (title, emoji, summary, etc.)
+export async function updateChat(req: Request, res: Response) {
+  const { chatId } = req.params;
+  const { title, emoji, summary } = req.body;
+  const userId = res.locals.user?.id;
+
+  if (!userId) {
+    return res
+      .status(401)
+      .json({ status: "ERROR", message: "User not authenticated" });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ status: "ERROR", message: "Chat not found" });
+    }
+
+    // Build update object with only provided fields
+    const updateData: any = { lastActivity: new Date() };
+    if (title !== undefined) updateData.title = title;
+    if (emoji !== undefined) updateData.emoji = emoji;
+    if (summary !== undefined) updateData.summary = summary;
+
+    const updatedChat = await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: updateData },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      status: "OK",
+      message: "Chat updated successfully",
+      chat: updatedChat,
+    });
+  } catch (error) {
+    console.error("Error updating chat:", error);
+    return res
+      .status(500)
+      .json({ status: "ERROR", message: "Failed to update chat" });
   }
 }
 
@@ -414,30 +448,22 @@ async function getRelevantChunks(
     // Build aggregation pipeline for vector search with conditional filter
     const vectorSearchStage: any = {
       $vectorSearch: {
-        index: "vector_index",
+        index: "sources_vector_index",
         path: "embedding",
         queryVector: queryEmbedding,
-        numCandidates: 500,
-        limit: 10,
+        numCandidates: 250,
+        limit: 25,
       },
     };
 
     // Only add source filter if sourceIds array has content
     if (sourceIds && sourceIds.length > 0) {
-      // Convert string IDs to ObjectIds with validation
-      const validIds = sourceIds.filter((id: string) => {
-        // Check if the ID is a valid ObjectId string (24 hex characters)
-        return id && typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
-      });
-
-      if (validIds.length > 0) {
-        const objectIds = validIds.map(
-          (id: string) => new mongoose.Types.ObjectId(id)
-        );
-        vectorSearchStage.$vectorSearch.filter = {
-          sourceId: { $in: objectIds },
-        };
-      }
+      const objectIds = sourceIds.map(
+        (id: string) => new mongoose.Types.ObjectId(id)
+      );
+      vectorSearchStage.$vectorSearch.filter = {
+        sourceId: { $in: objectIds },
+      };
     }
 
     const pipeline: any[] = [
@@ -448,7 +474,6 @@ async function getRelevantChunks(
         },
       },
     ];
-
     // Add population stage for source details
     pipeline.push(
       {

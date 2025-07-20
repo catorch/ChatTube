@@ -11,6 +11,13 @@ export type {
   LLMProvider,
 } from "./types";
 
+// Utilities
+export {
+  parseStructuredLLMResponse,
+  validateAndSanitizeFields,
+  type ParsedJSONResult,
+} from "./utils";
+
 export { OpenAIClient } from "./clients/openai";
 export { GeminiClient } from "./clients/gemini";
 export { ClaudeClient } from "./clients/claude";

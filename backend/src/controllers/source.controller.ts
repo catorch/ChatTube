@@ -1,11 +1,17 @@
-import { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import Source from '../models/Source';
-import SourceChunk from '../models/SourceChunk';
-import Chat from '../models/Chat';
+import { Request, Response } from "express";
+import mongoose from "mongoose";
+import Source from "../models/Source";
+import SourceChunk from "../models/SourceChunk";
+import Chat from "../models/Chat";
 import OpenAI from "openai";
-import { queueSourceForProcessing, getProcessingStatus } from '../ingestion/service';
-import { isSourceTypeSupported, getSupportedSourceTypes } from '../ingestion/registry';
+import {
+  queueSourceForProcessing,
+  getProcessingStatus,
+} from "../ingestion/service";
+import {
+  isSourceTypeSupported,
+  getSupportedSourceTypes,
+} from "../ingestion/registry";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -17,9 +23,9 @@ export async function listSources(req: Request, res: Response) {
   const userId = res.locals.user?.id;
 
   if (!userId) {
-    return res.status(401).json({ 
-      status: 'ERROR', 
-      message: 'User not authenticated' 
+    return res.status(401).json({
+      status: "ERROR",
+      message: "User not authenticated",
     });
   }
 
@@ -27,25 +33,24 @@ export async function listSources(req: Request, res: Response) {
     // Verify chat belongs to user
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) {
-      return res.status(404).json({ 
-        status: 'ERROR', 
-        message: 'Chat not found' 
+      return res.status(404).json({
+        status: "ERROR",
+        message: "Chat not found",
       });
     }
 
     // Get all sources for this chat
-    const sources = await Source.find({ chatId })
-      .sort({ createdAt: 1 });
+    const sources = await Source.find({ chatId }).sort({ createdAt: 1 });
 
-    return res.status(200).json({ 
-      status: 'OK', 
-      sources 
+    return res.status(200).json({
+      status: "OK",
+      sources,
     });
   } catch (error) {
-    console.error('Error listing sources:', error);
-    return res.status(500).json({ 
-      status: 'ERROR', 
-      message: 'Failed to list sources' 
+    console.error("Error listing sources:", error);
+    return res.status(500).json({
+      status: "ERROR",
+      message: "Failed to list sources",
     });
   }
 }
@@ -53,28 +58,28 @@ export async function listSources(req: Request, res: Response) {
 // Add sources to a specific chat
 export async function addSources(req: Request, res: Response) {
   const { chatId } = req.params;
-  const { sources = [] } = req.body as { 
+  const { sources = [] } = req.body as {
     sources: Array<{
-      kind: 'youtube' | 'pdf' | 'web' | 'file';
+      kind: "youtube" | "pdf" | "web" | "file";
       url?: string;
       title?: string;
       fileId?: string;
       metadata?: Record<string, any>;
-    }>
+    }>;
   };
   const userId = res.locals.user?.id;
 
   if (!userId) {
-    return res.status(401).json({ 
-      status: 'ERROR', 
-      message: 'User not authenticated' 
+    return res.status(401).json({
+      status: "ERROR",
+      message: "User not authenticated",
     });
   }
 
   if (!sources.length) {
-    return res.status(400).json({ 
-      status: 'ERROR', 
-      message: 'No sources provided' 
+    return res.status(400).json({
+      status: "ERROR",
+      message: "No sources provided",
     });
   }
 
@@ -82,46 +87,50 @@ export async function addSources(req: Request, res: Response) {
     // Verify chat belongs to user
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) {
-      return res.status(404).json({ 
-        status: 'ERROR', 
-        message: 'Chat not found' 
+      return res.status(404).json({
+        status: "ERROR",
+        message: "Chat not found",
       });
     }
 
     // Validate source types
     const supportedTypes = getSupportedSourceTypes();
-    const unsupportedSources = sources.filter(s => !isSourceTypeSupported(s.kind));
+    const unsupportedSources = sources.filter(
+      (s) => !isSourceTypeSupported(s.kind)
+    );
     if (unsupportedSources.length > 0) {
       return res.status(400).json({
-        status: 'ERROR',
-        message: `Unsupported source types: ${unsupportedSources.map(s => s.kind).join(', ')}. Supported types: ${supportedTypes.join(', ')}`,
-        supportedTypes
+        status: "ERROR",
+        message: `Unsupported source types: ${unsupportedSources
+          .map((s) => s.kind)
+          .join(", ")}. Supported types: ${supportedTypes.join(", ")}`,
+        supportedTypes,
       });
     }
 
     // Check for existing sources to avoid duplicates (by URL where applicable)
-    const urlsToCheck = sources.filter(s => s.url).map(s => s.url);
-    const existingSources = await Source.find({ 
-      chatId, 
-      url: { $in: urlsToCheck }
+    const urlsToCheck = sources.filter((s) => s.url).map((s) => s.url);
+    const existingSources = await Source.find({
+      chatId,
+      url: { $in: urlsToCheck },
     });
-    const existingUrls = existingSources.map(s => s.url);
+    const existingUrls = existingSources.map((s) => s.url);
 
     // Filter out sources that already exist
-    const newSources = sources.filter(source => 
-      !source.url || !existingUrls.includes(source.url)
+    const newSources = sources.filter(
+      (source) => !source.url || !existingUrls.includes(source.url)
     );
 
     if (newSources.length === 0) {
       return res.status(200).json({
-        status: 'OK',
-        message: 'All sources already exist in this chat',
-        sources: existingSources
+        status: "OK",
+        message: "All sources already exist in this chat",
+        sources: existingSources,
       });
     }
 
     // Create Source documents with pending status
-    const sourceDocs = newSources.map(source => ({
+    const sourceDocs = newSources.map((source) => ({
       userId,
       chatId,
       kind: source.kind,
@@ -130,10 +139,10 @@ export async function addSources(req: Request, res: Response) {
       fileId: source.fileId,
       metadata: {
         ...source.metadata,
-        processingStatus: 'pending',
+        processingStatus: "pending",
         isProcessed: false,
         createdAt: new Date(),
-      }
+      },
     }));
 
     const createdSources = await Source.insertMany(sourceDocs);
@@ -142,15 +151,15 @@ export async function addSources(req: Request, res: Response) {
     const processingPromises = createdSources.map(async (source) => {
       try {
         // Only queue YouTube sources for now since others aren't implemented
-        if (source.kind === 'youtube') {
+        if (source.kind === "youtube") {
           await queueSourceForProcessing((source._id as any).toString());
         } else {
           // Mark non-YouTube sources as failed for now
           await Source.findByIdAndUpdate(source._id, {
             $set: {
-              'metadata.processingStatus': 'failed',
-              'metadata.errorMessage': `${source.kind} processing not yet implemented`,
-              'metadata.failedAt': new Date(),
+              "metadata.processingStatus": "failed",
+              "metadata.errorMessage": `${source.kind} processing not yet implemented`,
+              "metadata.failedAt": new Date(),
             },
           });
         }
@@ -160,40 +169,39 @@ export async function addSources(req: Request, res: Response) {
     });
 
     // Don't wait for processing, queue in background
-    Promise.all(processingPromises).catch(error => {
-      console.error('Error queuing sources for processing:', error);
+    Promise.all(processingPromises).catch((error) => {
+      console.error("Error queuing sources for processing:", error);
     });
 
     // Update chat with new source IDs
     await Chat.findByIdAndUpdate(chatId, {
-      $addToSet: { 
-        sourceIds: { $each: createdSources.map(s => s._id) }
+      $addToSet: {
+        sourceIds: { $each: createdSources.map((s) => s._id) },
       },
-      lastActivity: new Date()
+      lastActivity: new Date(),
     });
 
     // Return all sources including existing ones
     const allSources = [...existingSources, ...createdSources];
 
     return res.status(201).json({
-      status: 'OK',
+      status: "OK",
       message: `Added ${createdSources.length} new sources to chat. Processing has been queued.`,
       sources: allSources,
       added: createdSources.length,
       existing: existingSources.length,
-      processingNote: 'Sources are being processed in the background. Check their status using the source ID.'
+      processingNote:
+        "Sources are being processed in the background. Check their status using the source ID.",
     });
-
   } catch (error: any) {
-    console.error('Error adding sources:', error);
+    console.error("Error adding sources:", error);
     return res.status(500).json({
-      status: 'ERROR',
-      message: 'Failed to add sources',
-      error: error.message
+      status: "ERROR",
+      message: "Failed to add sources",
+      error: error.message,
     });
   }
 }
-
 
 // Remove a specific source from a chat
 export async function removeSource(req: Request, res: Response) {
@@ -201,44 +209,43 @@ export async function removeSource(req: Request, res: Response) {
   const userId = res.locals.user?.id;
 
   if (!userId) {
-    return res.status(401).json({ 
-      status: 'ERROR', 
-      message: 'User not authenticated' 
+    return res.status(401).json({
+      status: "ERROR",
+      message: "User not authenticated",
     });
   }
 
   try {
     // Find and remove the source
-    const source = await Source.findOneAndDelete({ 
-      _id: sourceId, 
-      chatId, 
-      userId 
+    const source = await Source.findOneAndDelete({
+      _id: sourceId,
+      chatId,
+      userId,
     });
-    
+
     if (!source) {
-      return res.status(404).json({ 
-        status: 'ERROR', 
-        message: 'Source not found' 
+      return res.status(404).json({
+        status: "ERROR",
+        message: "Source not found",
       });
     }
 
     // Update chat to remove source reference
     await Chat.findByIdAndUpdate(chatId, {
       $pull: { sourceIds: source._id },
-      lastActivity: new Date()
+      lastActivity: new Date(),
     });
 
     return res.status(200).json({
-      status: 'OK',
-      message: 'Source removed successfully',
-      removedSourceId: sourceId
+      status: "OK",
+      message: "Source removed successfully",
+      removedSourceId: sourceId,
     });
-
   } catch (error) {
-    console.error('Error removing source:', error);
-    return res.status(500).json({ 
-      status: 'ERROR', 
-      message: 'Failed to remove source' 
+    console.error("Error removing source:", error);
+    return res.status(500).json({
+      status: "ERROR",
+      message: "Failed to remove source",
     });
   }
 }
@@ -299,13 +306,13 @@ export async function getSource(req: Request, res: Response) {
       chunkCount = await SourceChunk.countDocuments({ sourceId: source._id });
     }
 
-    return res.status(200).json({ 
-      status: "OK", 
+    return res.status(200).json({
+      status: "OK",
       source: {
         ...source.toObject(),
         processingStatus,
-        chunkCount
-      }
+        chunkCount,
+      },
     });
   } catch (error) {
     console.error("Error fetching source:", error);
@@ -321,9 +328,9 @@ export async function getSourceStatus(req: Request, res: Response) {
 
   try {
     const processingStatus = await getProcessingStatus(sourceId);
-    return res.status(200).json({ 
-      status: "OK", 
-      processingStatus 
+    return res.status(200).json({
+      status: "OK",
+      processingStatus,
     });
   } catch (error) {
     console.error("Error fetching source status:", error);
@@ -356,7 +363,7 @@ export async function searchSourceChunks(req: Request, res: Response) {
     const pipeline: any[] = [
       {
         $vectorSearch: {
-          index: "vector_index",
+          index: "sources_vector_index",
           path: "embedding",
           queryVector: queryEmbedding,
           numCandidates: 100,
@@ -417,4 +424,4 @@ export async function searchSourceChunks(req: Request, res: Response) {
       error: error.message,
     });
   }
-} 
+}

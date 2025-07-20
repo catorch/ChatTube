@@ -3,7 +3,9 @@ import { Schema, model, Document, Types } from "mongoose";
 export interface IChat extends Document {
   userId: Types.ObjectId;
   title: string;
-  sourceIds: Types.ObjectId[];  // sources within this chat
+  emoji?: string; // e.g. "📺"
+  summary?: string; // auto-generated summary from first source
+  sourceIds: Types.ObjectId[]; // sources within this chat
   isActive: boolean;
   lastActivity: Date;
   createdAt: Date;
@@ -23,6 +25,16 @@ const ChatSchema = new Schema<IChat>(
       required: true,
       trim: true,
       maxlength: 200,
+    },
+    emoji: {
+      type: String,
+      trim: true,
+      maxlength: 4,
+    },
+    summary: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
     },
     sourceIds: [
       {

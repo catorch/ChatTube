@@ -33,6 +33,9 @@ chatRouter.post("/:chatId/sources", sourceController.addSources);
 // Remove a specific source from a chat
 chatRouter.delete("/:chatId/sources/:sourceId", sourceController.removeSource);
 
+// Update chat (title, etc.)
+chatRouter.put("/:chatId", chatController.updateChat);
+
 // Delete a chat
 chatRouter.delete("/:chatId", chatController.deleteChat);
 

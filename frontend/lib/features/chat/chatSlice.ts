@@ -25,6 +25,8 @@ export interface Message {
 export interface Chat {
   id: string;
   title: string;
+  emoji?: string;
+  summary?: string;
   lastMessage: string;
   timestamp: string; // Changed from Date to string (ISO format)
   messageCount: number;
@@ -126,6 +128,8 @@ const convertApiMessage = (apiMessage: ApiMessage): Message => ({
 const convertApiChat = (apiChat: ApiChat): Chat => ({
   id: apiChat._id,
   title: apiChat.title,
+  emoji: apiChat.emoji,
+  summary: apiChat.summary,
   lastMessage: "", // We'll calculate this from messages if needed
   timestamp: apiChat.lastActivity || apiChat.updatedAt,
   messageCount: 0, // We'll calculate this from messages if needed
@@ -201,6 +205,20 @@ const chatSlice = createSlice({
     },
     clearSourceSelection: (state) => {
       state.selectedSourceIds = [];
+    },
+
+    // Optimistic title update without API call
+    updateChatTitleOptimistic: (
+      state,
+      action: PayloadAction<{ chatId: string; title: string }>
+    ) => {
+      const { chatId, title } = action.payload;
+
+      // Update in chat list
+      const chatIndex = state.chatList.findIndex((chat) => chat.id === chatId);
+      if (chatIndex !== -1) {
+        state.chatList[chatIndex].title = title;
+      }
     },
 
     // Streaming management
@@ -429,10 +447,20 @@ export const {
   toggleSourceSelection,
   selectAllSources,
   clearSourceSelection,
+  updateChatTitleOptimistic,
   startStreaming,
   stopStreaming,
   handleStreamEvent,
 } = chatSlice.actions;
+
+// Selectors
+export const selectCurrentChat = (state: { chat: ChatState }) => {
+  if (!state.chat.currentChatId) return null;
+  return (
+    state.chat.chatList.find((chat) => chat.id === state.chat.currentChatId) ||
+    null
+  );
+};
 
 export { loadChatList, deleteChat, renameChatTitle };
 export default chatSlice.reducer;

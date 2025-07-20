@@ -11,6 +11,9 @@ import {
   startStreaming,
   stopStreaming,
   handleStreamEvent,
+  selectCurrentChat,
+  renameChatTitle,
+  updateChatTitleOptimistic,
 } from "@/lib/features/chat/chatSlice";
 import { useListSourcesQuery } from "@/lib/api/services/sources";
 import { chatApi } from "@/lib/api/services/chat";
@@ -30,7 +33,9 @@ import {
   Sparkles,
   MessageCircle,
   ChevronDown,
+  Edit2,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 
 const AIAvatar = () => (
   <div className="flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-[var(--brand)]/10">
@@ -126,19 +131,21 @@ export default function ChatPanel() {
     selectedSourceIds,
   } = useAppSelector((state) => state.chat);
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const currentChat = useAppSelector(selectCurrentChat);
   const { data: chatSources = [] } = useListSourcesQuery(currentChatId!, {
     skip: !currentChatId,
   });
   const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitle, setEditingTitle] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamRef = useRef<{ close: () => void } | null>(null);
 
   // Check if there are any sources available in the chat
   const hasAvailableSources = chatSources.length > 0;
-  const hasSelectedSources = selectedSourceIds.length > 0;
 
   // Get user initials for display
   const getUserInitials = () => {
@@ -301,6 +308,81 @@ export default function ChatPanel() {
     }
   };
 
+  // Debounced function for optimistic updates (faster feedback)
+  const debouncedOptimisticUpdate = useDebouncedCallback(
+    (chatId: string, title: string, originalTitle: string) => {
+      if (title.trim() && title.trim() !== originalTitle) {
+        dispatch(
+          updateChatTitleOptimistic({
+            chatId,
+            title: title.trim(),
+          })
+        );
+      }
+    },
+    200 // 200ms delay for UI updates
+  );
+
+  // Debounced function to save title changes to API
+  const debouncedSaveTitle = useDebouncedCallback(
+    (chatId: string, title: string, originalTitle: string) => {
+      if (title.trim() && title.trim() !== originalTitle) {
+        dispatch(renameChatTitle({ chatId, title: title.trim() }));
+      }
+    },
+    1000 // 1 second delay for API calls
+  );
+
+  const handleTitleEdit = () => {
+    if (currentChat) {
+      setEditingTitle(currentChat.title);
+      setIsEditingTitle(true);
+    }
+  };
+
+  const handleTitleChange = (newTitle: string) => {
+    // Only update local input state immediately for responsive typing
+    setEditingTitle(newTitle);
+
+    if (currentChatId && currentChat) {
+      // Debounced optimistic update (200ms) for UI feedback
+      debouncedOptimisticUpdate(currentChatId, newTitle, currentChat.title);
+
+      // Debounced API call (1000ms) to persist the change
+      debouncedSaveTitle(currentChatId, newTitle, currentChat.title);
+    }
+  };
+
+  const handleTitleSave = () => {
+    // Force immediate save and exit editing mode
+    if (
+      currentChatId &&
+      editingTitle.trim() &&
+      editingTitle.trim() !== currentChat?.title
+    ) {
+      dispatch(
+        renameChatTitle({ chatId: currentChatId, title: editingTitle.trim() })
+      );
+    }
+    setIsEditingTitle(false);
+    setEditingTitle("");
+  };
+
+  const handleTitleCancel = () => {
+    setIsEditingTitle(false);
+    setEditingTitle("");
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleTitleSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleTitleCancel();
+    }
+  };
+
   // Group messages for rendering
   const messageGroups = groupMessages(messages);
 
@@ -326,6 +408,42 @@ export default function ChatPanel() {
     <div className="flex-1 flex flex-col h-full bg-background relative">
       {/* Enhanced Header with Context */}
       <div className="shrink-0 p-4 sm:p-6 border-b border-border bg-surface-1/80 backdrop-blur-sm">
+        {/* Chat Title Section */}
+        {currentChat && (
+          <div className="mb-4">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                {currentChat.emoji && (
+                  <span className="text-xl">{currentChat.emoji}</span>
+                )}
+                <input
+                  type="text"
+                  value={editingTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  onKeyDown={handleTitleKeyDown}
+                  onBlur={handleTitleSave}
+                  className="flex-1 text-lg font-semibold bg-transparent border-none outline-none focus:outline-none text-foreground"
+                  autoFocus
+                  placeholder="Chat title..."
+                />
+              </div>
+            ) : (
+              <button
+                onClick={handleTitleEdit}
+                className="flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary transition-colors group cursor-pointer"
+              >
+                {currentChat.emoji && (
+                  <span className="text-xl">{currentChat.emoji}</span>
+                )}
+                <span className="group-hover:underline">
+                  {currentChat.title}
+                </span>
+                <Edit2 className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-emerald-500 rounded-full" />

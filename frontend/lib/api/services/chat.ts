@@ -57,6 +57,8 @@ export interface Chat {
   _id: string;
   userId: string;
   title: string;
+  emoji?: string;
+  summary?: string;
   sourceIds: string[]; // Changed from videoIds to sourceIds
   lastActivity: string;
   isActive: boolean;

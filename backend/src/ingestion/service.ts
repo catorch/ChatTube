@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import Source from "../models/Source";
 import SourceChunk from "../models/SourceChunk";
+import Chat from "../models/Chat";
 import { getProcessor } from "./registry";
 import { IngestionResult } from "./types";
+import { summarizeSource } from "../services/summarizationService";
 import chalk from "chalk";
 
 /**
@@ -135,6 +137,57 @@ export async function processSource(sourceId: string): Promise<void> {
     console.log(chalk.gray(`   • Total processing time: ${totalDuration}ms`));
     console.log(chalk.gray(`   • Chunks created: ${insertedChunks.length}`));
     console.log(chalk.gray(`   • Source type: ${source.kind}`));
+
+    // Auto-populate chat metadata if this is the first source
+    try {
+      const chat = await Chat.findById(source.chatId);
+
+      if (
+        chat &&
+        chat.sourceIds.length === 1 &&
+        (!chat.title || chat.title === "New Chat")
+      ) {
+        console.log(
+          chalk.blue(
+            `🎨 [AUTO-SUMMARIZATION] Generating title and summary for first source...`
+          )
+        );
+
+        const { title, summary, emoji } = await summarizeSource(sourceId);
+
+        await Chat.findByIdAndUpdate(chat.id, {
+          $set: { title, summary, emoji },
+        });
+
+        // Also store on source
+        await Source.findByIdAndUpdate(sourceId, {
+          $set: {
+            "metadata.autoSummary": summary,
+            "metadata.autoTitle": title,
+            "metadata.autoEmoji": emoji,
+          },
+        });
+
+        console.log(
+          chalk.green.bold(
+            `📝 [AUTO-SUMMARIZATION] Auto-named chat "${title}" ${emoji}`
+          )
+        );
+      } else {
+        console.log(
+          chalk.gray(
+            `📝 [AUTO-SUMMARIZATION] Skipping - not first source or chat already has title`
+          )
+        );
+      }
+    } catch (error) {
+      // Don't fail the entire ingestion if summarization fails
+      console.log(
+        chalk.yellow(
+          `⚠️ [AUTO-SUMMARIZATION] Failed to generate summary: ${error}`
+        )
+      );
+    }
   } catch (error: any) {
     const errorDuration =
       Date.now() - new Date(source.metadata?.startedAt || new Date()).getTime();

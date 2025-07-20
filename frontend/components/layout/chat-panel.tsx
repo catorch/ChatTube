@@ -36,6 +36,7 @@ import {
   Edit2,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
+import { useParams } from "next/navigation";
 
 const AIAvatar = () => (
   <div className="flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-[var(--brand)]/10">
@@ -143,7 +144,8 @@ export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamRef = useRef<{ close: () => void } | null>(null);
-
+  const params = useParams();
+  const routeChatId = (params?.chatId as string) || null;
   // Check if there are any sources available in the chat
   const hasAvailableSources = chatSources.length > 0;
 
@@ -194,7 +196,7 @@ export default function ChatPanel() {
     };
   }, []);
 
-  // Initialize chat on component mount (only when authenticated)
+  // Initialize chat on component mount (only when no chatId is provided)
   useEffect(() => {
     const initializeChat = async () => {
       if (!isAuthenticated || !user) {
@@ -202,7 +204,7 @@ export default function ChatPanel() {
         return;
       }
 
-      if (!currentChatId) {
+      if (!currentChatId && !routeChatId) {
         try {
           const response = await chatApi.createChat("New Chat");
           dispatch(setCurrentChatId(response.chat._id));
@@ -213,7 +215,7 @@ export default function ChatPanel() {
     };
 
     initializeChat();
-  }, [currentChatId, dispatch, isAuthenticated, user]);
+  }, [currentChatId, dispatch, isAuthenticated, user, routeChatId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

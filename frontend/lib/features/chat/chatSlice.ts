@@ -173,9 +173,10 @@ const chatSlice = createSlice({
       state.currentInput = action.payload;
     },
     setCurrentChatId: (state, action: PayloadAction<string | null>) => {
+      const oldChatId = state.currentChatId;
       state.currentChatId = action.payload;
       // Clear selected sources when switching chats
-      if (action.payload !== state.currentChatId) {
+      if (action.payload !== oldChatId) {
         state.selectedSourceIds = [];
       }
     },

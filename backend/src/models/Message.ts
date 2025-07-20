@@ -10,6 +10,15 @@ export interface IMessage extends Document {
       chunkIds: Types.ObjectId[];
       timestamps?: number[];
     }[];
+    citationMap?: {
+      [label: string]: {
+        // e.g. "^1"
+        sourceId: Types.ObjectId;
+        chunkId: Types.ObjectId;
+        text: string; // full chunk text for tooltip
+        startTime?: number; // keeps YT/AV support
+      };
+    };
     tokenCount?: number;
     model?: string;
     temperature?: number;
@@ -56,6 +65,21 @@ const MessageSchema = new Schema<IMessage>(
           timestamps: [Number],
         },
       ],
+      citationMap: {
+        type: Map,
+        of: {
+          sourceId: {
+            type: Schema.Types.ObjectId,
+            ref: "Source",
+          },
+          chunkId: {
+            type: Schema.Types.ObjectId,
+            ref: "SourceChunk",
+          },
+          text: String,
+          startTime: Number,
+        },
+      },
       tokenCount: Number,
       model: String,
       temperature: Number,

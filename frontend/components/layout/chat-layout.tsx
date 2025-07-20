@@ -183,7 +183,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
               className="fixed inset-0 bg-black/50 z-40 sm:hidden backdrop-blur-sm"
               onClick={() => setIsMobileSourcesOpen(false)}
             />
-            <div className="fixed left-0 top-14 bottom-0 w-80 z-50 sm:hidden">
+            <div className="fixed left-0 top-0 bottom-0 w-80 z-50 sm:hidden bg-background border-r border-border shadow-xl">
               <SourcesPanel isCollapsed={false} />
             </div>
           </>

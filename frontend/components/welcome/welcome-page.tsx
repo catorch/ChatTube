@@ -421,20 +421,17 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                       Loading your conversations...
                     </p>
                   </div>
-                ) : totalChats === 0 ? (
+                ) : chatList.length === 0 ? (
                   <div className="text-center py-20">
                     <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-primary/10">
                       <MessageCircle className="h-10 w-10 text-primary" />
                     </div>
                     <h3 className="text-2xl font-light mb-4 text-foreground">
-                      {searchQuery
-                        ? "No conversations match your search"
-                        : "Your conversation space awaits"}
+                      Your conversation space awaits
                     </h3>
                     <p className="text-muted-foreground mb-8 text-lg leading-relaxed max-w-md mx-auto">
-                      {searchQuery
-                        ? "Try adjusting your search terms to find what you're looking for"
-                        : "Start your first intelligent conversation with video content"}
+                      Start your first intelligent conversation with video
+                      content
                     </p>
                     <Button
                       onClick={(e) => handleCreateNewChat(e)}
@@ -590,10 +587,30 @@ export function WelcomePage({}: WelcomePageProps = {}) {
 
                         {/* Table Body */}
                         <tbody>
-                          {paginatedChats.map((chat, index) => (
-                            <tr
-                              key={chat.id}
-                              className={`
+                          {paginatedChats.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="p-8 text-center">
+                                <div className="space-y-4">
+                                  <div className="w-16 h-16 mx-auto bg-gradient-to-br from-muted/20 to-muted/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-muted/20">
+                                    <Search className="h-8 w-8 text-muted-foreground" />
+                                  </div>
+                                  <div>
+                                    <h3 className="text-lg font-medium mb-2 text-foreground">
+                                      No conversations match your search
+                                    </h3>
+                                    <p className="text-muted-foreground">
+                                      Try adjusting your search terms to find
+                                      what you're looking for
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedChats.map((chat, index) => (
+                              <tr
+                                key={chat.id}
+                                className={`
                                  group border-t border-border hover:bg-muted/50 cursor-pointer transition-colors
                                  ${
                                    index === paginatedChats.length - 1
@@ -601,10 +618,162 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                      : "border-b border-border/30"
                                  }
                                `}
-                            >
-                              {editingChatId === chat.id ? (
-                                <td colSpan={3} className="p-4">
-                                  <div className="flex items-center gap-3">
+                              >
+                                {editingChatId === chat.id ? (
+                                  <td colSpan={3} className="p-4">
+                                    <div className="flex items-center gap-3">
+                                      <Input
+                                        value={editingTitle}
+                                        onChange={(e) => {
+                                          const currentChat =
+                                            paginatedChats.find(
+                                              (c) => c.id === editingChatId
+                                            );
+                                          handleTitleChange(
+                                            e.target.value,
+                                            currentChat?.title || ""
+                                          );
+                                        }}
+                                        className="flex-1 h-9 text-sm bg-background border-border/50 rounded-lg focus-lux"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            handleRenameConfirm();
+                                          } else if (e.key === "Escape") {
+                                            handleRenameCancel();
+                                          }
+                                        }}
+                                      />
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleRenameConfirm}
+                                        className="h-9 w-9 p-0 hover:bg-green-50 hover:text-green-600 rounded-lg"
+                                      >
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleRenameCancel}
+                                        className="h-9 w-9 p-0 hover:bg-red-50 hover:text-red-600 rounded-lg"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                ) : (
+                                  <>
+                                    <td
+                                      className="p-4 font-medium text-foreground group-hover:text-primary transition-colors"
+                                      onClick={() => handleChatClick(chat.id)}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="line-clamp-1 flex items-center gap-2">
+                                          {chat.emoji && (
+                                            <span className="text-lg">
+                                              {chat.emoji}
+                                            </span>
+                                          )}
+                                          {chat.title}
+                                        </span>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 rounded-lg ml-2"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent
+                                            align="end"
+                                            className="rounded-xl border-border/50 bg-background/95 backdrop-blur-sm"
+                                          >
+                                            <DropdownMenuItem
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRenameStart(
+                                                  chat.id,
+                                                  chat.title
+                                                );
+                                              }}
+                                              className="rounded-lg"
+                                            >
+                                              <Edit2 className="h-4 w-4 mr-2" />
+                                              Rename
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteStart(chat.id);
+                                              }}
+                                              className="text-destructive focus:text-destructive rounded-lg"
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    </td>
+                                    <td
+                                      className="p-4 text-muted-foreground text-right"
+                                      onClick={() => handleChatClick(chat.id)}
+                                    >
+                                      <div className="flex items-center justify-end gap-2">
+                                        <MessageSquare className="h-3.5 w-3.5" />
+                                        <span>{chat.messageCount}</span>
+                                      </div>
+                                    </td>
+                                    <td
+                                      className="p-4 text-muted-foreground text-right"
+                                      onClick={() => handleChatClick(chat.id)}
+                                    >
+                                      <div className="flex items-center justify-end gap-2">
+                                        <CalendarDays className="h-3.5 w-3.5" />
+                                        <span>
+                                          {formatDate(chat.timestamp)}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    ) : (
+                      // Grid Layout (Legacy support)
+                      <div className="p-6">
+                        {paginatedChats.length === 0 ? (
+                          <div className="text-center py-16">
+                            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-muted/20 to-muted/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-muted/20">
+                              <Search className="h-10 w-10 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-xl font-medium mb-4 text-foreground">
+                              No conversations match your search
+                            </h3>
+                            <p className="text-muted-foreground">
+                              Try adjusting your search terms to find what
+                              you're looking for
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {paginatedChats.map((chat) => (
+                              <div
+                                key={chat.id}
+                                className="group card-soft p-6 aspect-square flex flex-col justify-between cursor-pointer hover-lift"
+                              >
+                                {editingChatId === chat.id ? (
+                                  <div className="flex items-center gap-3 flex-1">
                                     <Input
                                       value={editingTitle}
                                       onChange={(e) => {
@@ -616,7 +785,7 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                           currentChat?.title || ""
                                         );
                                       }}
-                                      className="flex-1 h-9 text-sm bg-background border-border/50 rounded-lg focus-lux"
+                                      className="h-10 text-base font-medium bg-background/80 border-border/50 rounded-lg focus-lux"
                                       autoFocus
                                       onKeyDown={(e) => {
                                         if (e.key === "Enter") {
@@ -630,7 +799,7 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                       variant="ghost"
                                       size="sm"
                                       onClick={handleRenameConfirm}
-                                      className="h-9 w-9 p-0 hover:bg-green-50 hover:text-green-600 rounded-lg"
+                                      className="h-10 w-10 p-0 hover:bg-green-50 hover:text-green-600 rounded-lg"
                                     >
                                       <Check className="h-4 w-4" />
                                     </Button>
@@ -638,221 +807,92 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                       variant="ghost"
                                       size="sm"
                                       onClick={handleRenameCancel}
-                                      className="h-9 w-9 p-0 hover:bg-red-50 hover:text-red-600 rounded-lg"
+                                      className="h-10 w-10 p-0 hover:bg-red-50 hover:text-red-600 rounded-lg"
                                     >
                                       <X className="h-4 w-4" />
                                     </Button>
                                   </div>
-                                </td>
-                              ) : (
-                                <>
-                                  <td
-                                    className="p-4 font-medium text-foreground group-hover:text-primary transition-colors"
-                                    onClick={() => handleChatClick(chat.id)}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="line-clamp-1 flex items-center gap-2">
-                                        {chat.emoji && (
-                                          <span className="text-lg">
-                                            {chat.emoji}
-                                          </span>
-                                        )}
-                                        {chat.title}
-                                      </span>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 rounded-lg ml-2"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                          align="end"
-                                          className="rounded-xl border-border/50 bg-background/95 backdrop-blur-sm"
+                                ) : (
+                                  <>
+                                    <div className="space-y-4">
+                                      <div className="flex items-start justify-between w-full">
+                                        <h3
+                                          className="font-medium text-lg line-clamp-2 text-foreground hover:text-primary transition-colors cursor-pointer leading-snug flex items-start gap-2"
+                                          onClick={() =>
+                                            handleChatClick(chat.id)
+                                          }
                                         >
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleRenameStart(
-                                                chat.id,
-                                                chat.title
-                                              );
-                                            }}
-                                            className="rounded-lg"
+                                          {chat.emoji && (
+                                            <span className="text-xl flex-shrink-0 mt-0.5">
+                                              {chat.emoji}
+                                            </span>
+                                          )}
+                                          <span className="flex-1">
+                                            {chat.title}
+                                          </span>
+                                        </h3>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-primary/10 rounded-lg"
+                                            >
+                                              <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent
+                                            align="end"
+                                            className="rounded-xl border-border/50 bg-background/95 backdrop-blur-sm"
                                           >
-                                            <Edit2 className="h-4 w-4 mr-2" />
-                                            Rename
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDeleteStart(chat.id);
-                                            }}
-                                            className="text-destructive focus:text-destructive rounded-lg"
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  </td>
-                                  <td
-                                    className="p-4 text-muted-foreground text-right"
-                                    onClick={() => handleChatClick(chat.id)}
-                                  >
-                                    <div className="flex items-center justify-end gap-2">
-                                      <MessageSquare className="h-3.5 w-3.5" />
-                                      <span>{chat.messageCount}</span>
-                                    </div>
-                                  </td>
-                                  <td
-                                    className="p-4 text-muted-foreground text-right"
-                                    onClick={() => handleChatClick(chat.id)}
-                                  >
-                                    <div className="flex items-center justify-end gap-2">
-                                      <CalendarDays className="h-3.5 w-3.5" />
-                                      <span>{formatDate(chat.timestamp)}</span>
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      // Grid Layout (Legacy support)
-                      <div className="p-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                          {paginatedChats.map((chat) => (
-                            <div
-                              key={chat.id}
-                              className="group card-soft p-6 aspect-square flex flex-col justify-between cursor-pointer hover-lift"
-                            >
-                              {editingChatId === chat.id ? (
-                                <div className="flex items-center gap-3 flex-1">
-                                  <Input
-                                    value={editingTitle}
-                                    onChange={(e) => {
-                                      const currentChat = paginatedChats.find(
-                                        (c) => c.id === editingChatId
-                                      );
-                                      handleTitleChange(
-                                        e.target.value,
-                                        currentChat?.title || ""
-                                      );
-                                    }}
-                                    className="h-10 text-base font-medium bg-background/80 border-border/50 rounded-lg focus-lux"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        handleRenameConfirm();
-                                      } else if (e.key === "Escape") {
-                                        handleRenameCancel();
-                                      }
-                                    }}
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleRenameConfirm}
-                                    className="h-10 w-10 p-0 hover:bg-green-50 hover:text-green-600 rounded-lg"
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleRenameCancel}
-                                    className="h-10 w-10 p-0 hover:bg-red-50 hover:text-red-600 rounded-lg"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="space-y-4">
-                                    <div className="flex items-start justify-between w-full">
-                                      <h3
-                                        className="font-medium text-lg line-clamp-2 text-foreground hover:text-primary transition-colors cursor-pointer leading-snug flex items-start gap-2"
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleRenameStart(
+                                                  chat.id,
+                                                  chat.title
+                                                )
+                                              }
+                                              className="rounded-lg"
+                                            >
+                                              <Edit2 className="h-4 w-4 mr-2" />
+                                              Rename
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleDeleteStart(chat.id)
+                                              }
+                                              className="text-destructive focus:text-destructive rounded-lg"
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                      <p
+                                        className="text-muted-foreground line-clamp-3 leading-relaxed cursor-pointer"
                                         onClick={() => handleChatClick(chat.id)}
                                       >
-                                        {chat.emoji && (
-                                          <span className="text-xl flex-shrink-0 mt-0.5">
-                                            {chat.emoji}
-                                          </span>
-                                        )}
-                                        <span className="flex-1">
-                                          {chat.title}
-                                        </span>
-                                      </h3>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-primary/10 rounded-lg"
-                                          >
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                          align="end"
-                                          className="rounded-xl border-border/50 bg-background/95 backdrop-blur-sm"
-                                        >
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              handleRenameStart(
-                                                chat.id,
-                                                chat.title
-                                              )
-                                            }
-                                            className="rounded-lg"
-                                          >
-                                            <Edit2 className="h-4 w-4 mr-2" />
-                                            Rename
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              handleDeleteStart(chat.id)
-                                            }
-                                            className="text-destructive focus:text-destructive rounded-lg"
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
+                                        {chat.lastMessage}
+                                      </p>
                                     </div>
-                                    <p
-                                      className="text-muted-foreground line-clamp-3 leading-relaxed cursor-pointer"
-                                      onClick={() => handleChatClick(chat.id)}
-                                    >
-                                      {chat.lastMessage}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center justify-between pt-4 border-t border-border/30">
-                                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <MessageCircle className="h-4 w-4" />
-                                      {chat.messageCount} messages
-                                    </span>
-                                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Clock className="h-4 w-4" />
-                                      {formatDate(chat.timestamp)}
-                                    </span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                                    <div className="flex items-center justify-between pt-4 border-t border-border/30">
+                                      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <MessageCircle className="h-4 w-4" />
+                                        {chat.messageCount} messages
+                                      </span>
+                                      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Clock className="h-4 w-4" />
+                                        {formatDate(chat.timestamp)}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 

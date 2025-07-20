@@ -1,0 +1,37 @@
+{
+  "name": "chattube",
+  "version": "1.0.0",
+  "description": "ChatTube - AI-powered chat with video content",
+  "private": true,
+  "scripts": {
+    "install:all": "pnpm install",
+    "dev": "pnpm run --parallel dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build": "pnpm run --recursive build",
+    "build:frontend": "pnpm --filter frontend build",
+    "build:backend": "pnpm --filter backend build",
+    "start": "pnpm run --parallel start",
+    "start:frontend": "pnpm --filter frontend start",
+    "start:backend": "pnpm --filter backend start",
+    "lint": "pnpm run --recursive lint",
+    "lint:frontend": "pnpm --filter frontend lint",
+    "clean": "pnpm run --recursive clean",
+    "worker": "pnpm --filter backend worker",
+    "worker:dev": "pnpm --filter backend worker:dev",
+    "worker:status": "pnpm --filter backend worker:status",
+    "worker:cleanup": "pnpm --filter backend worker:cleanup"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

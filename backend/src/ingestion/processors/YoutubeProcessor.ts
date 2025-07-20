@@ -1,4 +1,4 @@
-import { SourceProcessor, IngestionResult } from "../types";
+import { SourceProcessor, IngestionResult, ChunkData } from "../types";
 import { ISource } from "../../models/Source";
 import AudioProcessor from "../../utils/audioProcessor";
 import OpenAI from "openai";
@@ -130,9 +130,86 @@ export class YoutubeProcessor implements SourceProcessor {
           `🔗 [YOUTUBE] Processing transcription segments and generating embeddings...`
         )
       );
-      const chunks = [];
+      const chunks: {
+        chunkIndex: number;
+        text: string;
+        startTime: number;
+        endTime: number;
+        embedding: number[];
+        tokenCount: number;
+        metadata: Record<string, any>;
+      }[] = [];
       let segmentCounter = 0;
       let embeddingCounter = 0;
+      let bufferText = "";
+      let bufferStart: number | null = null;
+      let bufferEnd: number | null = null;
+      let bufferSegmentIds: number[] = [];
+      let sumAvgLogProb = 0;
+      let sumNoSpeechProb = 0;
+      let sumCompressionRatio = 0;
+
+      const finalizeChunk = async () => {
+        if (!bufferText) {
+          return;
+        }
+
+        console.log(
+          chalk.blue(
+            `🧠 [YOUTUBE] Creating embedding for chunk ${
+              segmentCounter + 1
+            }: "${bufferText.substring(0, 50)}..."`
+          )
+        );
+
+        try {
+          const embeddingCallStart = Date.now();
+          const embedding = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: bufferText,
+          });
+          const embeddingCallDuration = Date.now() - embeddingCallStart;
+          embeddingCounter++;
+
+          console.log(
+            chalk.green(
+              `✅ [YOUTUBE] Embedding ${embeddingCounter} created in ${embeddingCallDuration}ms (${embedding.data[0].embedding.length} dimensions)`
+            )
+          );
+
+          chunks.push({
+            chunkIndex: segmentCounter,
+            text: bufferText,
+            startTime: bufferStart ?? 0,
+            endTime: bufferEnd ?? bufferStart ?? 0,
+            embedding: embedding.data[0].embedding,
+            tokenCount: bufferText.split(/\s+/).length,
+            metadata: {
+              audioSource: "whisper",
+              whisperModel: "whisper-1",
+              whisperSegmentIds: bufferSegmentIds,
+              avgLogProb: sumAvgLogProb / bufferSegmentIds.length,
+              noSpeechProb: sumNoSpeechProb / bufferSegmentIds.length,
+              compressionRatio: sumCompressionRatio / bufferSegmentIds.length,
+            },
+          });
+
+          segmentCounter++;
+          bufferText = "";
+          bufferSegmentIds = [];
+          bufferStart = null;
+          bufferEnd = null;
+          sumAvgLogProb = 0;
+          sumNoSpeechProb = 0;
+          sumCompressionRatio = 0;
+        } catch (embeddingError) {
+          console.log(
+            chalk.red(
+              `❌ [YOUTUBE] Failed to create embedding for chunk ${segmentCounter}: ${embeddingError}`
+            )
+          );
+        }
+      };
       const embeddingStartTime = Date.now();
 
       for (let i = 0; i < transcriptions.length; i++) {
@@ -145,11 +222,9 @@ export class YoutubeProcessor implements SourceProcessor {
           )
         );
 
-        // Process each segment within the transcription
         for (let j = 0; j < transcription.segments.length; j++) {
           const segment = transcription.segments[j];
 
-          // Skip empty or very short segments
           if (!segment.text.trim() || segment.text.trim().length < 3) {
             console.log(
               chalk.gray(
@@ -161,58 +236,27 @@ export class YoutubeProcessor implements SourceProcessor {
             continue;
           }
 
-          console.log(
-            chalk.blue(
-              `🧠 [YOUTUBE] Creating embedding for segment ${
-                segmentCounter + 1
-              }: "${segment.text.substring(0, 50)}..."`
-            )
-          );
+          if (bufferText.length === 0) {
+            bufferStart = segment.start;
+          }
 
-          try {
-            // Create embedding for the segment
-            const embeddingCallStart = Date.now();
-            const embedding = await openai.embeddings.create({
-              model: "text-embedding-3-small",
-              input: segment.text,
-            });
-            const embeddingCallDuration = Date.now() - embeddingCallStart;
-            embeddingCounter++;
+          if (bufferText.length > 0) {
+            bufferText += " ";
+          }
+          bufferText += segment.text.trim();
+          bufferEnd = segment.end;
+          bufferSegmentIds.push(segment.id);
+          sumAvgLogProb += segment.avg_logprob;
+          sumNoSpeechProb += segment.no_speech_prob;
+          sumCompressionRatio += segment.compression_ratio;
 
-            console.log(
-              chalk.green(
-                `✅ [YOUTUBE] Embedding ${embeddingCounter} created in ${embeddingCallDuration}ms (${embedding.data[0].embedding.length} dimensions)`
-              )
-            );
-
-            chunks.push({
-              chunkIndex: segmentCounter,
-              text: segment.text,
-              startTime: segment.start,
-              endTime: segment.end,
-              embedding: embedding.data[0].embedding,
-              tokenCount: segment.text.split(" ").length,
-              metadata: {
-                audioSource: "whisper",
-                whisperModel: "whisper-1",
-                whisperSegmentId: segment.id,
-                avgLogProb: segment.avg_logprob,
-                noSpeechProb: segment.no_speech_prob,
-                compressionRatio: segment.compression_ratio,
-              },
-            });
-
-            segmentCounter++;
-          } catch (embeddingError) {
-            console.log(
-              chalk.red(
-                `❌ [YOUTUBE] Failed to create embedding for segment ${segmentCounter}: ${embeddingError}`
-              )
-            );
-            // Continue with next segment rather than failing entire process
+          if (bufferText.length >= 512) {
+            await finalizeChunk();
           }
         }
       }
+
+      await finalizeChunk();
 
       const embeddingDuration = Date.now() - embeddingStartTime;
       console.log(

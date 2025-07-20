@@ -135,6 +135,10 @@ export interface SignupRequest {
   lastName?: string;
 }
 
+export interface GoogleAuthRequest {
+  token: string;
+}
+
 export interface AuthCheckResponse {
   status: string;
   isAuthenticated: boolean;

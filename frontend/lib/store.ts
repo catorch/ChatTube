@@ -6,6 +6,7 @@ import sourcesReducer from "./features/sources/sourcesSlice";
 import chatReducer from "./features/chat/chatSlice";
 import { resetStore } from "./types";
 import { api } from "./api/base";
+import logger from "./middleware/logger";
 
 // Transform for redux-persist (all slices now use ISO strings, so no date conversion needed)
 const dateTransform = createTransform(
@@ -80,6 +81,7 @@ export const store = configureStore({
         ignoredPaths: [],
       },
     }).concat(api.middleware),
+  // .concat(logger),
 });
 
 export const persistor = persistStore(store);

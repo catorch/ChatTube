@@ -3,6 +3,8 @@ import * as emailValidator from "email-validator";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { OAuth2Client } from "google-auth-library";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -11,6 +13,7 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 const JWT_SECRET = process.env.JWT_SECRET;
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || "");
 
 export async function signup(req: Request, res: Response) {
   const { email, password, firstName, lastName } = req.body;
@@ -127,6 +130,64 @@ export async function login(req: Request, res: Response) {
     return res
       .status(500)
       .json({ status: "ERROR", message: "Login failed due to server error" });
+  }
+}
+
+export async function googleAuth(req: Request, res: Response) {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Missing Google token",
+    });
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.email) {
+      return res.status(401).json({
+        status: "ERROR",
+        message: "Invalid Google token",
+      });
+    }
+
+    const email = payload.email;
+    const firstName = payload.given_name;
+    const lastName = payload.family_name;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      user = await User.create({
+        email,
+        password: randomPassword,
+        firstName,
+        lastName,
+      });
+    }
+
+    const tokenPayload = { userId: user.id, email: user.email };
+    const jwtToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "7d" });
+
+    return res.status(200).json({
+      status: "OK",
+      message: "Login successful",
+      user: user.toJSON(),
+      token: jwtToken,
+    });
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    return res.status(401).json({
+      status: "ERROR",
+      message: "Failed to authenticate with Google",
+    });
   }
 }
 

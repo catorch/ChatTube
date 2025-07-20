@@ -93,17 +93,31 @@ export const chatApi = {
   async createChat(
     title?: string
   ): Promise<{ status: string; chat: Chat; message?: string }> {
+    const requestId = Math.random().toString(36).substr(2, 9);
+    console.log(
+      `🌐 [${requestId}] Frontend: Making API call to create chat - ${new Date().toISOString()}`
+    );
+
     const response = await fetch(`${API_BASE_URL}/chats`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ title }),
     });
 
+    console.log(
+      `🌐 [${requestId}] Frontend: Got response status ${response.status}`
+    );
+
     if (!response.ok) {
+      console.error(`🌐 [${requestId}] Frontend: API call failed`);
       throw new Error("Failed to create chat");
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(
+      `🌐 [${requestId}] Frontend: Chat created with ID ${result.chat?._id}`
+    );
+    return result;
   },
 
   async getUserChats(page = 1, limit = 20): Promise<ChatsResponse> {

@@ -17,16 +17,25 @@ const openai = new OpenAI({
 
 // Create a new chat session
 export async function createChat(req: Request, res: Response) {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(
+    `🔵 [${requestId}] createChat called - userId: ${
+      res.locals.user?.id
+    }, timestamp: ${new Date().toISOString()}`
+  );
+
   const { title } = req.body;
   const userId = res.locals.user?.id;
 
   if (!userId) {
+    console.log(`🔴 [${requestId}] No userId found`);
     return res
       .status(401)
       .json({ status: "ERROR", message: "User not authenticated" });
   }
 
   try {
+    console.log(`🟡 [${requestId}] Creating chat in database...`);
     const chat = await Chat.create({
       userId,
       title: title || "New Chat",
@@ -34,13 +43,14 @@ export async function createChat(req: Request, res: Response) {
       lastActivity: new Date(),
     });
 
+    console.log(`🟢 [${requestId}] Chat created successfully: ${chat._id}`);
     return res.status(201).json({
       status: "OK",
       message: "Chat created successfully. Add sources to start chatting.",
       chat,
     });
   } catch (error) {
-    console.error("Error creating chat:", error);
+    console.error(`🔴 [${requestId}] Error creating chat:`, error);
     return res
       .status(500)
       .json({ status: "ERROR", message: "Failed to create chat" });

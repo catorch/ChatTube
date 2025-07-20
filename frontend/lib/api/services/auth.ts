@@ -4,6 +4,7 @@ import {
   AuthCheckResponse,
   LoginRequest,
   SignupRequest,
+  GoogleAuthRequest,
 } from "../types";
 
 export const authApi = {
@@ -19,6 +20,10 @@ export const authApi = {
    */
   async signup(userData: SignupRequest): Promise<AuthResponse> {
     return apiClient.post<AuthResponse>("/auth/signup", userData);
+  },
+
+  async loginWithGoogle(data: GoogleAuthRequest): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>("/auth/google", data);
   },
 
   /**

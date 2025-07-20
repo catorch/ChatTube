@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,18 +137,61 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     setCurrentPage(1);
   }, [searchQuery, sortBy, sortOrder]);
 
-  const handleCreateNewChat = async () => {
-    try {
-      // Create new chat via API
-      const response = await chatApi.createChat();
-      const newChatId = response.chat._id;
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const creatingRef = useRef(false);
+  const lastCallRef = useRef(0);
 
-      // Navigate to the new chat
-      router.push(`/chat/${newChatId}`);
-    } catch (error) {
-      console.error("Failed to create new chat:", error);
-    }
-  };
+  const handleCreateNewChat = useCallback(
+    async (event?: React.MouseEvent) => {
+      // Prevent default behavior and stop propagation
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      const now = Date.now();
+      console.log(
+        "🚀 handleCreateNewChat called, isCreatingChat:",
+        isCreatingChat,
+        "creatingRef:",
+        creatingRef.current
+      );
+
+      // Debounce: prevent calls within 1 second
+      if (now - lastCallRef.current < 1000) {
+        console.log("🛑 Debounce: too soon since last call");
+        return;
+      }
+
+      // Check both state and ref to prevent race conditions
+      if (isCreatingChat || creatingRef.current) {
+        console.log("🛑 Already creating chat, returning early");
+        return;
+      }
+
+      console.log("✅ Setting creation flags to true");
+      lastCallRef.current = now;
+      creatingRef.current = true;
+      setIsCreatingChat(true);
+
+      try {
+        console.log("📡 Making API call to create chat...");
+        const response = await chatApi.createChat();
+        const newChatId = response.chat._id;
+        console.log("✅ Chat created successfully:", newChatId);
+
+        // Navigate to the new chat
+        router.push(`/chat/${newChatId}`);
+      } catch (error) {
+        console.error("❌ Failed to create new chat:", error);
+      } finally {
+        console.log("🔄 Setting creation flags to false");
+        creatingRef.current = false;
+        setIsCreatingChat(false);
+      }
+    },
+    [isCreatingChat, router]
+  );
 
   const handleChatClick = (chatId: string) => {
     // Navigate to the specific chat
@@ -394,11 +437,14 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                         : "Start your first intelligent conversation with video content"}
                     </p>
                     <Button
-                      onClick={handleCreateNewChat}
-                      className="lux-gradient gap-3 px-8 py-6 text-lg font-medium rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl text-white hover-lift"
+                      onClick={(e) => handleCreateNewChat(e)}
+                      disabled={isCreatingChat}
+                      className="lux-gradient gap-3 px-8 py-6 text-lg font-medium rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl text-white hover-lift disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-5 w-5" />
-                      Create Your First Chat
+                      {isCreatingChat
+                        ? "Creating Chat..."
+                        : "Create Your First Chat"}
                     </Button>
                   </div>
                 ) : (
@@ -409,11 +455,12 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                         {/* Primary Action */}
                         <div className="flex items-center gap-4">
                           <Button
-                            onClick={handleCreateNewChat}
-                            className="lux-gradient gap-3 px-6 py-3 text-base font-medium rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl text-white hover-lift"
+                            onClick={(e) => handleCreateNewChat(e)}
+                            disabled={isCreatingChat}
+                            className="lux-gradient gap-3 px-6 py-3 text-base font-medium rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl text-white hover-lift disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             <Plus className="h-5 w-5" />
-                            New Chat
+                            {isCreatingChat ? "Creating..." : "New Chat"}
                           </Button>
                           <div className="hidden sm:block w-px h-10 bg-border/50" />
                         </div>

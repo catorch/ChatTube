@@ -151,13 +151,13 @@ export function DiscoverSourcesModal({
       return;
     }
 
-    // Only allow YouTube sources for now since others aren't implemented
-    const supportedTypes = ["youtube"] as const;
+    // Allow YouTube videos and web pages for now
+    const supportedTypes = ["youtube", "web"] as const;
     if (!supportedTypes.includes(source.kind as any)) {
       const kindName =
         source.kind.charAt(0).toUpperCase() + source.kind.slice(1);
       alert(
-        `${kindName} sources are not yet implemented. Only YouTube videos are currently supported.`
+        `${kindName} sources are not yet implemented. Only YouTube videos and websites are currently supported.`
       );
       return;
     }
@@ -277,17 +277,23 @@ export function DiscoverSourcesModal({
                                   Trending
                                 </Badge>
                               )}
-                              {source.kind !== "youtube" && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Soon
-                                </Badge>
-                              )}
+                              {source.kind !== "youtube" &&
+                                source.kind !== "web" && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    Soon
+                                  </Badge>
+                                )}
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => handleAddSource(source)}
                                 disabled={
-                                  isAddingSource || source.kind !== "youtube"
+                                  isAddingSource ||
+                                  (source.kind !== "youtube" &&
+                                    source.kind !== "web")
                                 }
                                 className="opacity-0 group-hover:opacity-100 transition-opacity"
                               >

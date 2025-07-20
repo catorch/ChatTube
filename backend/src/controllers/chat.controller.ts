@@ -324,7 +324,7 @@ export async function streamMessage(req: Request, res: Response) {
     );
 
     const relevantChunks = await getRelevantChunks(content, sourceIds);
-    console.log(relevantChunks);
+
     // Send context event
     res.write(
       `data: ${JSON.stringify({

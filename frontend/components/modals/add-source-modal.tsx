@@ -55,7 +55,7 @@ const sourceTypes = [
     icon: Globe,
     description: "Add a website URL",
     placeholder: "https://example.com/article",
-    available: false,
+    available: true,
   },
   {
     id: "file",
@@ -308,7 +308,7 @@ export function AddSourceModal({ isOpen, onClose }: AddSourceModalProps) {
                   <p className="font-medium text-sm">Coming Soon</p>
                   <p className="text-sm">
                     {selectedSourceType.name} sources are not yet available.
-                    Only YouTube videos are currently supported.
+                    Currently only YouTube videos and websites are supported.
                   </p>
                 </div>
               </div>

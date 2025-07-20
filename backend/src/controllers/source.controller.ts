@@ -150,11 +150,11 @@ export async function addSources(req: Request, res: Response) {
     // Queue sources for processing
     const processingPromises = createdSources.map(async (source) => {
       try {
-        // Only queue YouTube sources for now since others aren't implemented
-        if (source.kind === "youtube") {
+        // Queue supported types (YouTube and web) for processing
+        if (source.kind === "youtube" || source.kind === "web") {
           await queueSourceForProcessing((source._id as any).toString());
         } else {
-          // Mark non-YouTube sources as failed for now
+          // Mark unsupported types as failed for now
           await Source.findByIdAndUpdate(source._id, {
             $set: {
               "metadata.processingStatus": "failed",

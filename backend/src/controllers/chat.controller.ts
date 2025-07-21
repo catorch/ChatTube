@@ -12,6 +12,7 @@ import {
 import { buildCitations } from "../utils/citationUtils";
 import { createChatPrompt } from "../prompts/chatPrompt";
 import OpenAI from "openai";
+import sseManager from "@/utils/sseManager";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -357,6 +358,42 @@ export async function streamMessage(req: Request, res: Response) {
         message: "Failed to generate response",
       })}\n\n`
     );
+    res.end();
+  }
+}
+
+export async function chatEvents(req: Request, res: Response) {
+  const { chatId } = req.params;
+  const userId = res.locals.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      status: "ERROR",
+      message: "User not authenticated",
+    });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) {
+      return res.status(404).json({
+        status: "ERROR",
+        message: "Chat not found",
+      });
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers":
+        "Content-Type, Authorization, Cache-Control",
+    });
+
+    sseManager.addConnection(chatId, res);
+  } catch (error) {
+    console.error("Error establishing chat events stream:", error);
     res.end();
   }
 }

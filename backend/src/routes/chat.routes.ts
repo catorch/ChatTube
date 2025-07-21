@@ -23,6 +23,9 @@ chatRouter.post("/:chatId/messages", chatController.sendMessage);
 // Stream a message to a chat with real-time AI response
 chatRouter.post("/:chatId/stream", chatController.streamMessage);
 
+// Subscribe to chat events (metadata updates)
+chatRouter.get("/:chatId/events", chatController.chatEvents);
+
 // ----- Sources within a chat -----
 // List sources for a specific chat
 chatRouter.get("/:chatId/sources", sourceController.listSources);

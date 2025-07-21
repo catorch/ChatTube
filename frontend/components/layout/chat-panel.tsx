@@ -14,6 +14,7 @@ import {
   selectCurrentChat,
   renameChatTitle,
   updateChatTitleOptimistic,
+  handleChatEvent,
 } from "@/lib/features/chat/chatSlice";
 import { useListSourcesQuery } from "@/lib/api/services/sources";
 import { chatApi } from "@/lib/api/services/chat";
@@ -144,6 +145,7 @@ export default function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamRef = useRef<{ close: () => void } | null>(null);
+  const chatEventsRef = useRef<{ close: () => void } | null>(null);
   const params = useParams();
   const routeChatId = (params?.chatId as string) || null;
   // Check if there are any sources available in the chat
@@ -193,6 +195,10 @@ export default function ChatPanel() {
         activeStreamRef.current.close();
         activeStreamRef.current = null;
       }
+      if (chatEventsRef.current) {
+        chatEventsRef.current.close();
+        chatEventsRef.current = null;
+      }
     };
   }, []);
 
@@ -216,6 +222,34 @@ export default function ChatPanel() {
 
     initializeChat();
   }, [currentChatId, dispatch, isAuthenticated, user, routeChatId]);
+
+  // Subscribe to chat metadata updates
+  useEffect(() => {
+    if (!currentChatId) return;
+
+    if (chatEventsRef.current) {
+      chatEventsRef.current.close();
+      chatEventsRef.current = null;
+    }
+
+    let controller: { close: () => void } | null = null;
+    chatApi
+      .subscribeToChatUpdates(currentChatId, (event) => {
+        dispatch(handleChatEvent(event));
+      })
+      .then((c) => {
+        controller = c;
+        chatEventsRef.current = c;
+      })
+      .catch((err) => console.error("Chat events stream error:", err));
+
+    return () => {
+      controller?.close();
+      if (chatEventsRef.current === controller) {
+        chatEventsRef.current = null;
+      }
+    };
+  }, [currentChatId, dispatch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

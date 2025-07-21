@@ -4,6 +4,7 @@ import {
   SendMessageRequest,
   Message as ApiMessage,
   StreamEvent,
+  ChatEvent,
   Chat as ApiChat,
 } from "../../api/services/chat";
 import { resetStore } from "../../types";
@@ -319,7 +320,8 @@ const chatSlice = createSlice({
                 : {
                     ...convertApiMessage(event.message as ApiMessage),
                     metadata: {
-                      ...convertApiMessage(event.message as ApiMessage).metadata,
+                      ...convertApiMessage(event.message as ApiMessage)
+                        .metadata,
                       citationMap: event.citationMap,
                       model: event.model,
                       tokenCount: event.tokenCount,
@@ -348,6 +350,23 @@ const chatSlice = createSlice({
             typeof event.message === "string"
               ? event.message
               : "An error occurred during streaming";
+          break;
+      }
+    },
+
+    handleChatEvent: (state, action: PayloadAction<ChatEvent>) => {
+      const event = action.payload;
+      switch (event.type) {
+        case "chat_updated":
+          const idx = state.chatList.findIndex((c) => c.id === event.chat._id);
+          if (idx !== -1) {
+            state.chatList[idx] = {
+              ...state.chatList[idx],
+              title: event.chat.title,
+              emoji: event.chat.emoji,
+              summary: event.chat.summary,
+            };
+          }
           break;
       }
     },
@@ -469,6 +488,7 @@ export const {
   startStreaming,
   stopStreaming,
   handleStreamEvent,
+  handleChatEvent,
 } = chatSlice.actions;
 
 // Selectors

@@ -306,6 +306,77 @@ export const chatApi = {
       throw error;
     }
   },
+  async subscribeToChatUpdates(
+    chatId: string,
+    onEvent: (event: ChatEvent) => void
+  ): Promise<{ close: () => void }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/chats/${chatId}/events`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("Failed to connect to event stream");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let isClosed = false;
+
+      const processStream = async () => {
+        try {
+          let buffer = "";
+
+          while (!isClosed) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const dataStr = line.slice(6).trim();
+                if (dataStr) {
+                  try {
+                    const data = JSON.parse(dataStr);
+                    onEvent(data);
+                  } catch (error) {
+                    console.error(
+                      "Failed to parse event data:",
+                      dataStr,
+                      error
+                    );
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          if (!isClosed) {
+            console.error("Event stream error:", error);
+          }
+        }
+      };
+
+      processStream();
+
+      return {
+        close: () => {
+          isClosed = true;
+          try {
+            reader.cancel();
+          } catch (error) {
+            console.error("Error closing event stream:", error);
+          }
+        },
+      };
+    } catch (error) {
+      console.error("Failed to subscribe to chat updates:", error);
+      throw error;
+    }
+  },
 };
 
 export interface StreamEvent {
@@ -325,4 +396,9 @@ export interface StreamEvent {
   };
   model?: string;
   tokenCount?: number;
+}
+
+export interface ChatEvent {
+  type: "chat_updated";
+  chat: Chat;
 }

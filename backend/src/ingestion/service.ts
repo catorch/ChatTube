@@ -5,6 +5,7 @@ import Chat from "../models/Chat";
 import { getProcessor } from "./registry";
 import { IngestionResult } from "./types";
 import { summarizeSource } from "../services/summarizationService";
+import sseManager from "../utils/sseManager";
 import chalk from "chalk";
 
 /**
@@ -157,6 +158,12 @@ export async function processSource(sourceId: string): Promise<void> {
 
         await Chat.findByIdAndUpdate(chat.id, {
           $set: { title, summary, emoji },
+        });
+
+        // Notify connected clients of chat metadata update
+        sseManager.sendEvent(chat.id.toString(), {
+          type: "chat_updated",
+          chat: { _id: chat.id.toString(), title, summary, emoji },
         });
 
         // Also store on source

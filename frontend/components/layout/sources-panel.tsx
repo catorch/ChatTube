@@ -321,14 +321,38 @@ export function SourcesPanel({
               </p>
             </div>
           </div>
-        ) : isInitialLoading ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Loading sources...
-              </p>
-            </div>
+        ) : isInitialLoading &&
+          (!filteredSources || filteredSources.length === 0) ? (
+          <div className="h-full overflow-y-auto p-4 space-y-2">
+            {/* Skeleton items */}
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="p-3 rounded-lg border border-border animate-pulse"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="h-4 w-4 bg-muted rounded" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="h-4 w-4 bg-muted rounded" />
+                        <div className="h-4 bg-muted rounded flex-1 max-w-32" />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="h-3 w-3 bg-muted rounded" />
+                        <div className="h-6 w-6 bg-muted rounded" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="h-3 w-20 bg-muted rounded" />
+                      <div className="h-5 w-16 bg-muted rounded-full" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : sourcesError ? (
           <div className="h-full flex items-center justify-center p-4">

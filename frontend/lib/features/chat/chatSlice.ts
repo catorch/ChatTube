@@ -249,9 +249,11 @@ const chatSlice = createSlice({
     setCurrentChatId: (state, action: PayloadAction<string | null>) => {
       const oldChatId = state.currentChatId;
       state.currentChatId = action.payload;
-      // Clear selected sources when switching chats
+      // Clear selected sources and messages when switching chats
       if (action.payload !== oldChatId) {
         state.selectedSourceIds = [];
+        // Clear messages immediately to prevent showing old chat messages
+        messagesAdapter.removeAll(state.messages);
       }
     },
     setSelectedProvider: (

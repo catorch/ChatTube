@@ -1,5 +1,5 @@
 import { createSelector } from "@reduxjs/toolkit";
-import { sourcesApi } from "@/lib/api/services/sources";
+import { sourcesApi } from "./sourcesSlice";
 
 // Selector to check if any sources are still processing for a given chat
 export const makeSelectIsProcessing = (chatId: string) =>

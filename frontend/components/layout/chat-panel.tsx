@@ -14,8 +14,10 @@ import {
   selectCurrentChat,
   renameChatTitle,
   updateChatTitleOptimistic,
+  selectAllMessages,
+  Message,
 } from "@/lib/features/chat/chatSlice";
-import { useListSourcesQuery } from "@/lib/api/services/sources";
+import { useListSourcesQuery } from "@/lib/features/sources/sourcesSlice";
 import { chatApi } from "@/lib/api/services/chat";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,10 +54,10 @@ const UserAvatar = ({ initials }: { initials: string }) => (
 
 interface MessageGroup {
   isUser: boolean;
-  messages: any[];
+  messages: Message[];
 }
 
-const groupMessages = (messages: any[]): MessageGroup[] => {
+const groupMessages = (messages: Message[]): MessageGroup[] => {
   if (messages.length === 0) return [];
 
   const groups: MessageGroup[] = [];
@@ -121,8 +123,8 @@ const getMessageRadius = (
 
 export default function ChatPanel() {
   const dispatch = useAppDispatch();
+  const messages = useAppSelector(selectAllMessages);
   const {
-    messages,
     isLoading,
     currentInput,
     currentChatId,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppSelector } from "@/lib/hooks";
-import { useAddSourcesMutation } from "@/lib/api/services/sources";
+import { useAddSourcesMutation } from "@/lib/features/sources/sourcesSlice";
 import {
   Dialog,
   DialogContent,

@@ -5,7 +5,7 @@ import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
   useListSourcesQuery,
   useRemoveSourceMutation,
-} from "@/lib/api/services/sources";
+} from "@/lib/features/sources/sourcesSlice";
 import {
   makeSelectIsProcessing,
   makeSelectProcessingCount,

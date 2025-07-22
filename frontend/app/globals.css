@@ -200,21 +200,31 @@
 
   /* Enhanced scrollbar with brand hint */
   ::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--brand) 55%, transparent);
+    background: linear-gradient(135deg, 
+      color-mix(in oklab, var(--brand) 60%, transparent),
+      color-mix(in oklab, var(--brand) 40%, transparent)
+    );
     border-radius: 8px;
-    box-shadow: inset 0 0 0 1px hsl(var(--muted-foreground) / 0.4);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--brand) 70%, transparent);
+    background: linear-gradient(135deg, 
+      color-mix(in oklab, var(--brand) 80%, transparent),
+      color-mix(in oklab, var(--brand) 60%, transparent)
+    );
+    background-clip: content-box;
   }
 
   /* Firefox scrollbar */
@@ -279,9 +289,19 @@
     border: 1px solid hsl(var(--border) / 0.5);
   }
 
-  /* Input dock shadow for docked feeling */
+  /* Enhanced input dock with gradient shadow */
   .input-dock {
-    box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: 
+      0 -8px 32px -8px rgba(0, 0, 0, 0.12),
+      0 -2px 8px -2px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .dark .input-dock {
+    box-shadow: 
+      0 -8px 32px -8px rgba(0, 0, 0, 0.3),
+      0 -2px 8px -2px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   /* Floating animation */
@@ -353,17 +373,36 @@
     background: var(--surface-2);
   }
 
-  /* Enhanced focus ring */
+  /* Enhanced focus ring with brand colors */
   .focus-lux:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--gold), 0 0 0 6px hsl(var(--gold) / 0.35);
+    box-shadow: 
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--brand),
+      0 0 20px 5px hsl(var(--brand) / 0.15);
   }
 
-  /* Enhanced chat bubble entrance */
+  /* Premium button press effect */
+  .btn-press:active {
+    transform: scale(0.95) translateY(1px);
+    transition: transform 0.1s ease;
+  }
+
+  /* Subtle background patterns */
+  .pattern-dots {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
+
+  .dark .pattern-dots {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.02) 1px, transparent 0);
+  }
+
+  /* Enhanced chat bubble entrance with stagger */
   @keyframes chat-in {
     0% {
       opacity: 0;
-      transform: translateY(10px) scale(0.96);
+      transform: translateY(15px) scale(0.95);
     }
     100% {
       opacity: 1;
@@ -372,16 +411,33 @@
   }
 
   .animate-chat-in {
-    animation: chat-in 0.4s cubic-bezier(0.38, 0.1, 0.36, 0.9) both;
+    animation: chat-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  /* Gradient mask reveal for streaming */
-  @keyframes gradient-reveal {
+  /* Message hover effects */
+  @keyframes message-glow {
     0% {
-      background-position: -100% 0;
+      box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+    }
+    50% {
+      box-shadow: 0 0 20px 5px rgba(var(--primary-rgb), 0.1);
     }
     100% {
-      background-position: 100% 0;
+      box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+    }
+  }
+
+  .message-hover {
+    animation: message-glow 2s ease-in-out infinite;
+  }
+
+  /* Enhanced gradient mask reveal for streaming */
+  @keyframes gradient-reveal {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
     }
   }
 
@@ -389,14 +445,40 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      var(--brand) 50%,
+      var(--brand) 30%,
+      color-mix(in oklab, var(--brand) 80%, white) 50%,
+      var(--brand) 70%,
       transparent 100%
     );
-    background-size: 200% 100%;
-    animation: gradient-reveal 1.5s ease-in-out infinite;
+    background-size: 300% 100%;
+    animation: gradient-reveal 2s ease-in-out infinite;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Typing indicator animation */
+  @keyframes typing-dot {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-10px);
+      opacity: 1;
+    }
+  }
+
+  .typing-dot {
+    animation: typing-dot 1.4s ease-in-out infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
   }
 
   /* Reduced motion support */

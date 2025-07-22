@@ -44,14 +44,18 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useParams } from "next/navigation";
 
-const AIAvatar = () => (
-  <div className="flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-[var(--brand)]/10">
-    <Sparkles className="h-5 w-5 text-white relative z-10" />
+const AIAvatar = ({ isThinking = false }: { isThinking?: boolean }) => (
+  <div className={`flex-shrink-0 w-10 h-10 lux-gradient rounded-full flex items-center justify-center shadow-[var(--elev-1)] ring-2 ring-[var(--brand)]/10 transition-all duration-300 ${
+    isThinking ? "animate-pulse ring-4 ring-[var(--brand)]/20" : ""
+  }`}>
+    <Sparkles className={`h-5 w-5 text-white relative z-10 transition-all duration-300 ${
+      isThinking ? "animate-spin" : ""
+    }`} />
   </div>
 );
 
 const UserAvatar = ({ initials }: { initials: string }) => (
-  <div className="flex-shrink-0 w-10 h-10 bg-muted/20 border border-border/50 rounded-full flex items-center justify-center text-sm font-medium text-foreground">
+  <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/20 rounded-full flex items-center justify-center text-sm font-semibold text-primary shadow-[var(--elev-1)] transition-all duration-200 hover:shadow-[var(--elev-2)] hover:scale-105">
     {initials}
   </div>
 );
@@ -401,15 +405,22 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
   // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 flex flex-col h-full bg-background items-center justify-center">
-        <div className="text-center py-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 lux-gradient rounded-full mb-4 shadow-[var(--elev-2)]">
-            <MessageCircle className="h-8 w-8 text-white relative z-10" />
+      <div 
+        className="flex-1 flex flex-col h-full bg-background items-center justify-center"
+        role="main"
+        aria-label="Login required"
+      >
+        <div className="text-center py-16 px-4">
+          <div 
+            className="inline-flex items-center justify-center w-20 h-20 lux-gradient rounded-full mb-6 shadow-[var(--elev-2)] floating"
+            aria-hidden="true"
+          >
+            <MessageCircle className="h-10 w-10 text-white relative z-10" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">Chat with Your Videos</h3>
-          <p className="text-muted-foreground max-w-md mx-auto mb-4">
+          <h1 className="text-2xl font-bold mb-4 text-foreground">Chat with Your Videos</h1>
+          <p className="text-muted-foreground max-w-lg mx-auto mb-6 text-lg leading-relaxed">
             Please sign in to start chatting with your video content and
-            sources.
+            unlock AI-powered insights from your sources.
           </p>
         </div>
       </div>
@@ -419,7 +430,11 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
   return (
     <div className="flex-1 flex flex-col h-full bg-background relative">
       {/* Enhanced Header with Context */}
-      <div className="shrink-0 p-4 sm:p-6 border-b border-border bg-surface-1/80 backdrop-blur-sm">
+      <div 
+        className="shrink-0 p-4 sm:p-6 border-b border-border bg-surface-1/80 backdrop-blur-sm"
+        role="banner"
+        aria-label="Chat header"
+      >
         {/* Chat Title Section */}
         {currentChat && (
           <div className="mb-4">
@@ -529,20 +544,27 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth scrollbar-visible"
         style={{ scrollbarGutter: "stable" }}
+        role="main"
+        aria-label="Chat messages"
+        tabIndex={0}
       >
         <div className="p-4 sm:p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="max-w-4xl mx-auto space-y-8">
             {messageGroups.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="inline-flex items-center justify-center w-20 h-20 lux-gradient rounded-full mb-6 shadow-[var(--elev-2)] floating">
-                  <Sparkles className="h-10 w-10 text-white relative z-10" />
+              <div className="text-center py-20 px-4">
+                <div 
+                  className="relative inline-flex items-center justify-center w-24 h-24 lux-gradient rounded-full mb-8 shadow-[var(--elev-2)] floating"
+                  aria-hidden="true"
+                >
+                  <Sparkles className="h-12 w-12 text-white relative z-10" />
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
                 </div>
-                <h3 className="text-xl font-semibold mb-4 text-foreground">
+                <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-foreground bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                   Welcome to ChatTube
-                </h3>
+                </h2>
                 {!hasAvailableSources ? (
                   <div>
-                    <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto mb-4">
+                    <p className="text-muted-foreground text-base sm:text-lg leading-relaxed max-w-lg mx-auto mb-4">
                       Add sources to your chat to start analyzing and asking
                       questions about your content.
                     </p>
@@ -555,7 +577,7 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                   </div>
                 ) : (
                   <div>
-                    <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto mb-4">
+                    <p className="text-muted-foreground text-base sm:text-lg leading-relaxed max-w-lg mx-auto mb-4">
                       Start a conversation by asking questions about your
                       sources. I&apos;ll help you explore and understand your
                       content with intelligent AI analysis.
@@ -573,9 +595,10 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
               messageGroups.map((group, groupIndex) => (
                 <div
                   key={`group-${groupIndex}`}
-                  className={`flex gap-4 ${
+                  className={`flex gap-4 animate-chat-in ${
                     group.isUser ? "justify-end" : "justify-start"
                   }`}
+                  style={{ animationDelay: `${groupIndex * 50}ms` }}
                 >
                   {/* Avatar - only shown for first message in group */}
                   {!group.isUser && <AIAvatar />}
@@ -603,14 +626,14 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                           {/* Message Bubble */}
                           <div
                             className={`
-                              p-4 break-words transition-all duration-200 ${getMessageRadius(
+                              p-4 break-words transition-all duration-300 hover:shadow-[var(--elev-2)] ${getMessageRadius(
                                 position,
                                 group.isUser
                               )}
                               ${
                                 group.isUser
-                                  ? "lux-gradient text-white shadow-lg ml-auto max-w-fit"
-                                  : "card-soft shadow-[var(--elev-1)] max-w-fit"
+                                  ? "lux-gradient text-white shadow-lg ml-auto max-w-fit hover:scale-[1.01]"
+                                  : "card-soft shadow-[var(--elev-1)] max-w-fit hover:bg-surface-2/50"
                               }
                             `}
                           >
@@ -625,11 +648,11 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
 
                           {/* Message Metadata */}
                           <div
-                            className={`flex items-center gap-2 mt-1 text-xs text-muted-foreground ${
+                            className={`flex items-center gap-3 mt-2 text-xs text-muted-foreground/80 opacity-0 group-hover:opacity-100 transition-all duration-200 ${
                               group.isUser ? "justify-end" : "justify-start"
                             }`}
                           >
-                            <span>
+                            <span className="bg-background/50 backdrop-blur-sm px-2 py-1 rounded-md border border-border/30">
                               {new Date(message.timestamp).toLocaleTimeString(
                                 [],
                                 {
@@ -639,7 +662,7 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                               )}
                             </span>
                             {message.sources && message.sources.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
                                 {message.sources.length} sources
                               </Badge>
                             )}
@@ -647,7 +670,7 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-5 w-5 p-0 hover:bg-primary/10"
+                                className="h-6 w-6 p-0 hover:bg-primary/10 rounded-md transition-all duration-200 hover:scale-110"
                                 onClick={() =>
                                   copyMessage(message.id, message.content)
                                 }
@@ -658,7 +681,7 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                                 }
                               >
                                 {copiedMessageId === message.id ? (
-                                  <Check className="h-3 w-3 text-green-500" />
+                                  <Check className="h-3 w-3 text-emerald-500" />
                                 ) : (
                                   <Copy className="h-3 w-3" />
                                 )}
@@ -678,10 +701,19 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
 
             {/* Enhanced Thinking Indicator */}
             {isLoading && (
-              <div className="flex gap-4 justify-start">
-                <AIAvatar />
-                <div className="card-soft p-4 rounded-xl rounded-tl-md shadow-[var(--elev-1)] max-w-fit">
-                  <div className="streaming-reveal text-sm">Thinking...</div>
+              <div className="flex gap-4 justify-start animate-chat-in">
+                <AIAvatar isThinking={true} />
+                <div className="card-soft p-4 rounded-xl rounded-tl-md shadow-[var(--elev-1)] max-w-fit relative overflow-hidden">
+                  <div className="streaming-reveal text-sm mb-1">Analyzing your sources...</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+                      <div className="w-2 h-2 bg-primary/70 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+                      <div className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">AI thinking</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-pulse" />
                 </div>
               </div>
             )}
@@ -692,9 +724,14 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
       </div>
 
       {/* Enhanced Input Area with Premium Dock Styling */}
-      <div className="shrink-0 p-4 sm:p-6 border-t border-border bg-surface-1/80 backdrop-blur-sm input-dock">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="relative">
+      <div 
+        className="shrink-0 p-4 sm:p-6 border-t border-border bg-gradient-to-t from-background via-surface-1/90 to-surface-1/80 backdrop-blur-sm input-dock"
+        role="complementary"
+        aria-label="Message input area"
+      >
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto" role="form">
+          <div className="relative group">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 rounded-xl opacity-0 group-focus-within:opacity-100 transition-all duration-300 blur-sm" />
             <textarea
               ref={textareaRef}
               value={inputValue}
@@ -705,70 +742,94 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
                   ? "Add sources to start chatting..."
                   : "Ask me anything about your sources..."
               }
-              className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              className="w-full min-h-[64px] max-h-40 p-5 pr-28 bg-background/95 backdrop-blur-sm border-2 border-border/50 rounded-xl focus:outline-none focus:border-primary/50 focus:shadow-[0_0_0_0_var(--primary),0_0_20px_-5px_hsl(var(--primary)/20%)] resize-none transition-all duration-300 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] relative z-10 placeholder:text-muted-foreground/60"
               rows={1}
               disabled={isLoading || !hasAvailableSources}
+              aria-label={!hasAvailableSources ? "Add sources to start chatting" : "Type your message"}
+              aria-describedby="input-help-text"
             />
 
-            <div className="absolute right-3 bottom-3 flex items-center gap-1 sm:gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading || !hasAvailableSources}
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading || !hasAvailableSources}
-              >
-                <Mic className="h-4 w-4" />
-              </Button>
+            <div className="absolute right-4 bottom-4 flex items-center gap-2 z-10">
+              <div className="hidden sm:flex items-center gap-1 mr-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 rounded-lg hover:bg-primary/10 transition-all duration-200 hover:scale-105"
+                  disabled={isLoading || !hasAvailableSources}
+                  title="Attach files"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 rounded-lg hover:bg-primary/10 transition-all duration-200 hover:scale-105"
+                  disabled={isLoading || !hasAvailableSources}
+                  title="Voice input"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              </div>
               <Button
                 type="submit"
                 size="sm"
                 variant="brand"
-                className="h-8 w-8 p-0 lux-gradient text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                className={`h-10 w-10 p-0 lux-gradient text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg relative overflow-hidden ${
+                  !inputValue.trim() || isLoading || !hasAvailableSources
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:scale-105 active:scale-95"
+                }`}
                 disabled={
                   !inputValue.trim() || isLoading || !hasAvailableSources
                 }
+                title="Send message"
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <span className="hidden sm:inline">
-                Press Enter to send, Shift+Enter for new line
-              </span>
-              <span className="sm:hidden">Enter to send</span>
-              {!hasAvailableSources ? (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-300"
-                >
-                  No sources available
+          <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground" id="input-help-text">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="hidden sm:flex items-center gap-1 text-muted-foreground/70" role="note" aria-label="Keyboard shortcuts">
+                <kbd className="px-2 py-1 bg-muted/30 rounded text-xs font-mono border border-border/50" aria-label="Enter key">⏎</kbd>
+                <span>send</span>
+                <span className="mx-1" aria-hidden="true">•</span>
+                <kbd className="px-2 py-1 bg-muted/30 rounded text-xs font-mono border border-border/50" aria-label="Shift plus Enter">⇧⏎</kbd>
+                <span>new line</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {!hasAvailableSources ? (
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-300"
+                  >
+                    No sources available
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5" />
+                    <span className="hidden sm:inline">Vector search: </span>
+                    {selectedSourceIds.length} sources selected
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-xs capitalize bg-primary/5 border-primary/20 text-primary">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full mr-1.5 animate-pulse" />
+                  {selectedProvider}
                 </Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs">
-                  <span className="hidden sm:inline">Vector search: </span>
-                  {chatSources.length} sources available
-                </Badge>
-              )}
-              <Badge variant="outline" className="text-xs capitalize">
-                {selectedProvider}
-              </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-              <span>Connected</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_hsl(var(--emerald-500)/50%)]" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Connected</span>
+              </div>
             </div>
           </div>
         </form>

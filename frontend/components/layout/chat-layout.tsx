@@ -78,7 +78,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Enhanced Glassmorphic Top Bar */}
-      <header className="sticky top-0 z-30 glass-effect h-14 sm:h-14 flex items-center justify-between px-4 sm:px-6 transition-all duration-200">
+      <header className="sticky top-0 z-30 glass-effect h-16 sm:h-16 flex items-center justify-between px-4 sm:px-6 transition-all duration-200 border-b border-border/50">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -102,18 +102,27 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="w-8 h-8 sm:w-9 sm:h-9 lux-gradient rounded-xl shadow-[var(--elev-2)] flex items-center justify-center">
-              <span className="text-white font-bold text-xs sm:text-sm relative z-10">
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 lux-gradient rounded-xl shadow-[var(--elev-2)] flex items-center justify-center hover:scale-105 transition-all duration-200">
+              <span className="text-white font-bold text-sm sm:text-base relative z-10">
                 CT
               </span>
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300" />
             </div>
-            <span className="font-semibold text-base sm:text-lg">ChatTube</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">ChatTube</span>
+              <span className="text-xs text-muted-foreground/80 font-medium">AI Video Analysis</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-9 w-9 p-0 rounded-lg hover:bg-primary/10 transition-all duration-200 hover:scale-105"
+            title="Settings"
+          >
             <Settings className="h-4 w-4" />
           </Button>
 
@@ -124,9 +133,10 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 relative"
+                  className="h-9 w-9 p-0 relative rounded-lg hover:scale-105 transition-all duration-200"
+                  title={`Signed in as ${getUserDisplayName()}`}
                 >
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium border border-primary/20">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-sm font-semibold border-2 border-primary/30 text-primary shadow-sm">
                     {getUserInitials()}
                   </div>
                 </Button>

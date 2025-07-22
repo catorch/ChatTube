@@ -331,13 +331,13 @@ export function SourcesPanel({
             {/* Enhanced Search */}
             <div className="relative mb-4 group">
               <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 rounded-xl opacity-0 group-focus-within:opacity-100 transition-all duration-300 blur-sm" />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70 group-focus-within:text-primary transition-colors duration-200 z-10" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200 z-20 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search sources..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 text-sm border-2 border-border/50 rounded-xl focus:outline-none focus:border-primary/50 bg-background/95 backdrop-blur-sm transition-all duration-200 relative z-10 placeholder:text-muted-foreground/60"
+                className="w-full pl-10 pr-4 py-3 text-sm border-2 border-border/50 rounded-xl focus:outline-none focus:border-primary/50 bg-background backdrop-blur-sm transition-all duration-200 relative z-10 placeholder:text-muted-foreground/60"
                 aria-label="Search sources"
               />
             </div>
@@ -366,7 +366,7 @@ export function SourcesPanel({
               >
                 <Button
                   variant="outline"
-                  className="w-full text-sm font-medium border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                  className="w-full text-sm font-medium border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10 hover:text-foreground transition-all duration-200"
                   onClick={() => setIsDiscoverModalOpen(true)}
                   disabled={!chatId}
                 >
@@ -390,7 +390,7 @@ export function SourcesPanel({
                       variant="ghost"
                       size="sm"
                       onClick={handleSelectAll}
-                      className="text-xs h-8 px-3 rounded-lg hover:bg-primary/10 transition-all duration-200"
+                      className="text-xs h-8 px-3 rounded-lg hover:bg-primary/10 hover:text-foreground transition-all duration-200"
                     >
                       <motion.div
                         animate={isAllSelected ? { scale: [1, 1.2, 1] } : {}}

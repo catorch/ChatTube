@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppSelector } from "@/lib/hooks";
-import { useAddSourcesMutation } from "@/lib/api/services/sources";
+import { useAddChatSourcesMutation } from "@/lib/features/sources/sourcesSlice";
 import {
   Dialog,
   DialogContent,
@@ -70,7 +70,7 @@ const sourceTypes = [
 export function AddSourceModal({ isOpen, onClose }: AddSourceModalProps) {
   const { currentChatId } = useAppSelector((state) => state.chat);
   const [addSources, { isLoading: isAddingSource, error: addSourceError }] =
-    useAddSourcesMutation();
+    useAddChatSourcesMutation();
 
   const [selectedType, setSelectedType] = useState<string>("youtube");
   const [url, setUrl] = useState("");

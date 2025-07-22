@@ -3,20 +3,24 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
-  sendMessage,
   setCurrentInput,
   setSelectedProvider,
-  clearMessages,
   setCurrentChatId,
-  startStreaming,
-  stopStreaming,
-  handleStreamEvent,
   selectCurrentChat,
-  renameChatTitle,
-  updateChatTitleOptimistic,
+  selectSelectedSourceIds,
+  selectSelectedProvider,
+  useCreateChatMutation,
+  useGetChatMessagesQuery,
+  useUpdateChatMutation,
+  selectAllMessages,
+  messagesAdapter,
 } from "@/lib/features/chat/chatSlice";
-import { useListSourcesQuery } from "@/lib/api/services/sources";
-import { chatApi } from "@/lib/api/services/chat";
+import {
+  useGetChatSourcesQuery,
+  selectAllSourcesFromAdapter,
+} from "@/lib/features/sources/sourcesSlice";
+import { useStreamingChatWithCleanup } from "@/lib/features/chat/useStreamingChat";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -35,7 +39,6 @@ import {
   ChevronDown,
   Edit2,
 } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
 import { useParams } from "next/navigation";
 
 const AIAvatar = () => (
@@ -60,20 +63,21 @@ const groupMessages = (messages: any[]): MessageGroup[] => {
 
   const groups: MessageGroup[] = [];
   let currentGroup: MessageGroup = {
-    isUser: messages[0].isUser,
+    isUser: messages[0].role === "user",
     messages: [messages[0]],
   };
 
   for (let i = 1; i < messages.length; i++) {
     const currentMessage = messages[i];
-    if (currentMessage.isUser === currentGroup.isUser) {
+    const isCurrentUser = currentMessage.role === "user";
+    if (isCurrentUser === currentGroup.isUser) {
       // Same sender, add to current group
       currentGroup.messages.push(currentMessage);
     } else {
       // Different sender, start new group
       groups.push(currentGroup);
       currentGroup = {
-        isUser: currentMessage.isUser,
+        isUser: isCurrentUser,
         messages: [currentMessage],
       };
     }
@@ -121,21 +125,46 @@ const getMessageRadius = (
 
 export default function ChatPanel() {
   const dispatch = useAppDispatch();
-  const {
-    messages,
-    isLoading,
-    currentInput,
-    currentChatId,
-    selectedProvider,
-    error,
-    streamingMessageId,
-    selectedSourceIds,
-  } = useAppSelector((state) => state.chat);
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
-  const currentChat = useAppSelector(selectCurrentChat);
-  const { data: chatSources = [] } = useListSourcesQuery(currentChatId!, {
-    skip: !currentChatId,
-  });
+  const currentChatId = useAppSelector(selectCurrentChat);
+  const selectedSourceIds = useAppSelector(selectSelectedSourceIds);
+  const selectedProvider = useAppSelector(selectSelectedProvider);
+
+  const params = useParams();
+  const routeChatId = (params?.chatId as string) || null;
+
+  // RTK Query hooks
+  const [createChat] = useCreateChatMutation();
+  const [updateChat] = useUpdateChatMutation();
+
+  const {
+    data: messagesData,
+    isLoading: messagesLoading,
+    error: messagesError,
+  } = useGetChatMessagesQuery(
+    { chatId: currentChatId! },
+    { skip: !currentChatId }
+  );
+
+  const { data: sourcesEntityState, isLoading: sourcesLoading } =
+    useGetChatSourcesQuery(currentChatId!, {
+      skip: !currentChatId,
+    });
+
+  // Extract normalized data
+  const messages = messagesData?.messages
+    ? selectAllMessages(messagesData.messages)
+    : [];
+  const currentChat = messagesData?.chat || null;
+  const sources = sourcesEntityState
+    ? selectAllSourcesFromAdapter(sourcesEntityState)
+    : [];
+
+  // Streaming hook for real-time chat
+  const { startStreamingMessage, isStreaming, streamingContent, streamError } =
+    useStreamingChatWithCleanup(currentChatId);
+
+  // Local state
   const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -143,11 +172,9 @@ export default function ChatPanel() {
   const [editingTitle, setEditingTitle] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const activeStreamRef = useRef<{ close: () => void } | null>(null);
-  const params = useParams();
-  const routeChatId = (params?.chatId as string) || null;
+
   // Check if there are any sources available in the chat
-  const hasAvailableSources = chatSources.length > 0;
+  const hasAvailableSources = sources.length > 0;
 
   // Get user initials for display
   const getUserInitials = () => {
@@ -180,21 +207,11 @@ export default function ChatPanel() {
 
   // Also scroll when streaming starts/stops
   useEffect(() => {
-    if (streamingMessageId) {
+    if (isStreaming) {
       // Small delay to ensure loading indicator is rendered
       setTimeout(scrollToBottom, 100);
     }
-  }, [streamingMessageId]);
-
-  // Cleanup stream on unmount
-  useEffect(() => {
-    return () => {
-      if (activeStreamRef.current) {
-        activeStreamRef.current.close();
-        activeStreamRef.current = null;
-      }
-    };
-  }, []);
+  }, [isStreaming]);
 
   // Initialize chat on component mount (only when no chatId is provided)
   useEffect(() => {
@@ -206,8 +223,10 @@ export default function ChatPanel() {
 
       if (!currentChatId && !routeChatId) {
         try {
-          const response = await chatApi.createChat("New Chat");
-          dispatch(setCurrentChatId(response.chat._id));
+          const response = await createChat({ title: "New Chat" });
+          if ("data" in response && response.data) {
+            dispatch(setCurrentChatId(response.data.chat.id));
+          }
         } catch (error) {
           console.error("Failed to create chat:", error);
         }
@@ -215,13 +234,13 @@ export default function ChatPanel() {
     };
 
     initializeChat();
-  }, [currentChatId, dispatch, isAuthenticated, user, routeChatId]);
+  }, [currentChatId, createChat, dispatch, isAuthenticated, user, routeChatId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !inputValue.trim() ||
-      isLoading ||
+      isStreaming ||
       !currentChatId ||
       !isAuthenticated ||
       !hasAvailableSources
@@ -231,45 +250,12 @@ export default function ChatPanel() {
     const content = inputValue.trim();
     setInputValue("");
 
-    // Close any existing stream before starting a new one
-    if (activeStreamRef.current) {
-      activeStreamRef.current.close();
-      activeStreamRef.current = null;
-    }
-
     try {
-      // Use streaming instead of regular send
-      const streamController = await chatApi.streamMessage(
-        currentChatId,
-        {
-          content,
-          sourceIds: selectedSourceIds,
-          provider: selectedProvider,
-        },
-        (event) => {
-          console.log("Stream event received:", event); // Debug log
-          dispatch(handleStreamEvent(event));
-
-          // Clean up when stream completes or errors
-          if (event.type === "complete" || event.type === "error") {
-            if (activeStreamRef.current) {
-              activeStreamRef.current.close();
-              activeStreamRef.current = null;
-            }
-            dispatch(stopStreaming());
-          }
-        }
-      );
-
-      // Store stream controller locally for cleanup
-      activeStreamRef.current = streamController;
-
-      // Don't start streaming here - wait for the "start" event
-      // The streaming will be started when we receive the actual messageId from the server
+      // Use streaming hook for real-time chat
+      await startStreamingMessage(content);
     } catch (error) {
       console.error("Failed to send message:", error);
-      setInputValue(content);
-      dispatch(stopStreaming());
+      setInputValue(content); // Restore input on error
     }
   };
 
@@ -310,30 +296,9 @@ export default function ChatPanel() {
     }
   };
 
-  // Debounced function for optimistic updates (faster feedback)
-  const debouncedOptimisticUpdate = useDebouncedCallback(
-    (chatId: string, title: string, originalTitle: string) => {
-      if (title.trim() && title.trim() !== originalTitle) {
-        dispatch(
-          updateChatTitleOptimistic({
-            chatId,
-            title: title.trim(),
-          })
-        );
-      }
-    },
-    200 // 200ms delay for UI updates
-  );
-
-  // Debounced function to save title changes to API
-  const debouncedSaveTitle = useDebouncedCallback(
-    (chatId: string, title: string, originalTitle: string) => {
-      if (title.trim() && title.trim() !== originalTitle) {
-        dispatch(renameChatTitle({ chatId, title: title.trim() }));
-      }
-    },
-    1000 // 1 second delay for API calls
-  );
+  // ============================================================================
+  // TITLE EDITING - Clean approach with local state + mutation
+  // ============================================================================
 
   const handleTitleEdit = () => {
     if (currentChat) {
@@ -342,32 +307,28 @@ export default function ChatPanel() {
     }
   };
 
-  const handleTitleChange = (newTitle: string) => {
-    // Only update local input state immediately for responsive typing
-    setEditingTitle(newTitle);
-
-    if (currentChatId && currentChat) {
-      // Debounced optimistic update (200ms) for UI feedback
-      debouncedOptimisticUpdate(currentChatId, newTitle, currentChat.title);
-
-      // Debounced API call (1000ms) to persist the change
-      debouncedSaveTitle(currentChatId, newTitle, currentChat.title);
-    }
-  };
-
-  const handleTitleSave = () => {
-    // Force immediate save and exit editing mode
+  const handleTitleSave = async () => {
     if (
-      currentChatId &&
-      editingTitle.trim() &&
-      editingTitle.trim() !== currentChat?.title
+      !currentChatId ||
+      !editingTitle.trim() ||
+      editingTitle.trim() === currentChat?.title
     ) {
-      dispatch(
-        renameChatTitle({ chatId: currentChatId, title: editingTitle.trim() })
-      );
+      setIsEditingTitle(false);
+      setEditingTitle("");
+      return;
     }
-    setIsEditingTitle(false);
-    setEditingTitle("");
+
+    try {
+      await updateChat({
+        chatId: currentChatId,
+        updates: { title: editingTitle.trim() },
+      });
+      setIsEditingTitle(false);
+      setEditingTitle("");
+    } catch (error) {
+      console.error("Failed to update chat title:", error);
+      // Keep editing mode open on error
+    }
   };
 
   const handleTitleCancel = () => {
@@ -421,7 +382,7 @@ export default function ChatPanel() {
                 <input
                   type="text"
                   value={editingTitle}
-                  onChange={(e) => handleTitleChange(e.target.value)}
+                  onChange={(e) => setEditingTitle(e.target.value)}
                   onKeyDown={handleTitleKeyDown}
                   onBlur={handleTitleSave}
                   className="flex-1 text-lg font-semibold bg-transparent border-none outline-none focus:outline-none text-foreground"
@@ -494,23 +455,17 @@ export default function ChatPanel() {
                 </div>
               )}
             </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => dispatch(clearMessages())}
-              title="Clear chat"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
         {/* Error Display */}
-        {error && (
+        {(messagesError || streamError) && (
           <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-[var(--r-2)]">
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-sm text-destructive">
+              {streamError ||
+                (messagesError as any)?.message ||
+                "An error occurred"}
+            </p>
           </div>
         )}
       </div>
@@ -554,7 +509,7 @@ export default function ChatPanel() {
                       variant="outline"
                       className="bg-primary/5 border-primary/20 text-primary"
                     >
-                      {chatSources.length} sources ready for analysis
+                      {sources.length} sources ready for analysis
                     </Badge>
                   </div>
                 )}
@@ -606,9 +561,11 @@ export default function ChatPanel() {
                           >
                             <MarkdownMessage
                               content={message.content}
-                              isUser={message.isUser}
+                              isUser={message.role === "user"}
                               isStreaming={message.isStreaming}
-                              className={message.isUser ? "text-white" : ""}
+                              className={
+                                message.role === "user" ? "text-white" : ""
+                              }
                               citationMap={message.metadata?.citationMap}
                             />
                           </div>
@@ -620,7 +577,7 @@ export default function ChatPanel() {
                             }`}
                           >
                             <span>
-                              {new Date(message.timestamp).toLocaleTimeString(
+                              {new Date(message.createdAt).toLocaleTimeString(
                                 [],
                                 {
                                   hour: "2-digit",
@@ -628,12 +585,14 @@ export default function ChatPanel() {
                                 }
                               )}
                             </span>
-                            {message.sources && message.sources.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {message.sources.length} sources
-                              </Badge>
-                            )}
-                            {!message.isUser && (
+                            {message.metadata?.sourceReferences &&
+                              message.metadata.sourceReferences.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  {message.metadata.sourceReferences.length}{" "}
+                                  sources
+                                </Badge>
+                              )}
+                            {message.role !== "user" && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -667,11 +626,13 @@ export default function ChatPanel() {
             )}
 
             {/* Enhanced Thinking Indicator */}
-            {isLoading && (
+            {isStreaming && (
               <div className="flex gap-4 justify-start">
                 <AIAvatar />
                 <div className="card-soft p-4 rounded-xl rounded-tl-md shadow-[var(--elev-1)] max-w-fit">
-                  <div className="streaming-reveal text-sm">Thinking...</div>
+                  <div className="streaming-reveal text-sm">
+                    {streamingContent || "Thinking..."}
+                  </div>
                 </div>
               </div>
             )}
@@ -697,7 +658,7 @@ export default function ChatPanel() {
               }
               className="w-full min-h-[56px] max-h-32 p-4 pr-24 bg-background border border-border rounded-xl focus:outline-none focus-lux resize-none shadow-[var(--elev-1)] transition-all duration-200 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
               rows={1}
-              disabled={isLoading || !hasAvailableSources}
+              disabled={isStreaming || !hasAvailableSources}
             />
 
             <div className="absolute right-3 bottom-3 flex items-center gap-1 sm:gap-2">
@@ -706,7 +667,7 @@ export default function ChatPanel() {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading || !hasAvailableSources}
+                disabled={isStreaming || !hasAvailableSources}
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -715,7 +676,7 @@ export default function ChatPanel() {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 hidden sm:flex"
-                disabled={isLoading || !hasAvailableSources}
+                disabled={isStreaming || !hasAvailableSources}
               >
                 <Mic className="h-4 w-4" />
               </Button>
@@ -725,7 +686,7 @@ export default function ChatPanel() {
                 variant="brand"
                 className="h-8 w-8 p-0 lux-gradient text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={
-                  !inputValue.trim() || isLoading || !hasAvailableSources
+                  !inputValue.trim() || isStreaming || !hasAvailableSources
                 }
               >
                 <Send className="h-4 w-4" />
@@ -749,7 +710,7 @@ export default function ChatPanel() {
               ) : (
                 <Badge variant="outline" className="text-xs">
                   <span className="hidden sm:inline">Vector search: </span>
-                  {chatSources.length} sources available
+                  {sources.length} sources available
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs capitalize">

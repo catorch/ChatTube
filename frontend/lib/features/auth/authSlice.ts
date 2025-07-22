@@ -1,14 +1,33 @@
-import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
-import { authApi } from "../../api/services/auth";
-import { User, LoginRequest, SignupRequest } from "../../api/types";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { api } from "../../api/base";
+import {
+  User,
+  LoginRequest,
+  SignupRequest,
+  GoogleAuthRequest,
+} from "../../api/types";
 import { resetStore } from "../../types";
 
+// Auth API Response Types
+export interface AuthResponse {
+  status: string;
+  user: User;
+  token: string;
+  message?: string;
+}
+
+export interface AuthCheckResponse {
+  status: string;
+  user: User | null;
+  isAuthenticated: boolean;
+}
+
+// Auth state interface
 interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
-  isInitialized: boolean; // To track if we've checked auth status on app load
+  isInitialized: boolean;
   error: string | null;
   showAuthModal: boolean;
   authModalMode: "login" | "signup";
@@ -16,76 +35,114 @@ interface AuthState {
 
 const initialState: AuthState = {
   user: null,
-  token: null, // Will be handled by redux-persist
+  token: null,
   isAuthenticated: false,
-  isLoading: false,
   isInitialized: false,
   error: null,
   showAuthModal: false,
   authModalMode: "login",
 };
 
-// Async thunks
-export const login = createAsyncThunk(
-  "auth/login",
-  async (credentials: LoginRequest) => {
-    const response = await authApi.login(credentials);
-    return { user: response.user, token: response.token };
-  }
-);
+// RTK Query API for authentication
+export const authApi = api.injectEndpoints({
+  endpoints: (build) => ({
+    // Login with credentials
+    login: build.mutation<AuthResponse, LoginRequest>({
+      query: (credentials) => ({
+        url: "/auth/login",
+        method: "POST",
+        body: credentials,
+      }),
+      invalidatesTags: ["Auth"],
+    }),
 
-export const signup = createAsyncThunk(
-  "auth/signup",
-  async (userData: SignupRequest) => {
-    const response = await authApi.signup(userData);
-    return { user: response.user, token: response.token };
-  }
-);
+    // Register new user
+    signup: build.mutation<AuthResponse, SignupRequest>({
+      query: (userData) => ({
+        url: "/auth/signup",
+        method: "POST",
+        body: userData,
+      }),
+      invalidatesTags: ["Auth"],
+    }),
 
-export const loginWithGoogle = createAsyncThunk(
-  "auth/loginWithGoogle",
-  async (data: { token: string }) => {
-    const response = await authApi.loginWithGoogle(data);
-    return { user: response.user, token: response.token };
-  }
-);
+    // Google OAuth login
+    loginWithGoogle: build.mutation<AuthResponse, GoogleAuthRequest>({
+      query: (data) => ({
+        url: "/auth/google",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["Auth"],
+    }),
 
-export const logout = createAsyncThunk("auth/logout", async () => {
-  // Redux-persist will handle clearing the token from storage
-  // Just call the API logout for any server-side cleanup
-  try {
-    await authApi.logout();
-  } catch (error) {
-    // Ignore logout API errors since token will be cleared by Redux
-    console.warn("Logout API call failed, but token will be cleared:", error);
-  }
+    // Logout user
+    logout: build.mutation<{ status: string; message: string }, void>({
+      query: () => ({
+        url: "/auth/logout",
+        method: "POST",
+      }),
+      invalidatesTags: ["Auth"],
+    }),
+
+    // Check authentication status
+    checkAuth: build.query<AuthCheckResponse, void>({
+      query: () => "/auth/me",
+      providesTags: ["Auth"],
+    }),
+  }),
 });
 
-export const checkAuth = createAsyncThunk(
-  "auth/checkAuth",
-  async (_, { getState }) => {
-    const state = getState() as any;
-    const token = state.auth.token;
+// Export RTK Query hooks
+export const {
+  useLoginMutation,
+  useSignupMutation,
+  useLoginWithGoogleMutation,
+  useLogoutMutation,
+  useCheckAuthQuery,
+  useLazyCheckAuthQuery,
+} = authApi;
 
-    if (!token) {
-      throw new Error("No token available");
-    }
-
-    const response = await authApi.checkAuth();
-    return response.user || null;
-  }
-);
-
+// Auth slice for client-side state management
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    // Set user and token from successful auth
+    setCredentials: (
+      state,
+      action: PayloadAction<{ user: User; token: string }>
+    ) => {
+      const { user, token } = action.payload;
+      state.user = user;
+      state.token = token;
+      state.isAuthenticated = true;
+      state.error = null;
+      state.showAuthModal = false;
+    },
+
+    // Clear credentials on logout
+    clearCredentials: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.error = null;
+    },
+
+    // Set initialization status
+    setInitialized: (state, action: PayloadAction<boolean>) => {
+      state.isInitialized = action.payload;
+    },
+
+    // Error management
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
     clearError: (state) => {
       state.error = null;
     },
+
+    // Auth modal management
     showAuthModal: (state, action: PayloadAction<"login" | "signup">) => {
       state.showAuthModal = true;
       state.authModalMode = action.payload;
@@ -99,7 +156,8 @@ const authSlice = createSlice({
       state.authModalMode = action.payload;
       state.error = null;
     },
-    // Handle redux-persist rehydration
+
+    // Handle token rehydration from persistence
     setAuthFromToken: (state) => {
       if (state.token && !state.isAuthenticated) {
         state.isAuthenticated = true;
@@ -108,106 +166,12 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // Check auth status
-    builder
-      .addCase(checkAuth.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(checkAuth.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isInitialized = true;
-        state.user = action.payload;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(checkAuth.rejected, (state) => {
-        state.isLoading = false;
-        state.isInitialized = true;
-        state.user = null;
-        state.token = null;
-        state.isAuthenticated = false;
-        state.error = null; // Don't show error for auth check failures
-        // Redux-persist will handle clearing invalid token
-      })
-
-      // Login
-      .addCase(login.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(login.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token || null;
-        state.isAuthenticated = true;
-        state.showAuthModal = false;
-        state.error = null;
-      })
-      .addCase(login.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.error.message || "Login failed";
-      })
-
-      // Google Login
-      .addCase(loginWithGoogle.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(loginWithGoogle.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token || null;
-        state.isAuthenticated = true;
-        state.showAuthModal = false;
-        state.error = null;
-      })
-      .addCase(loginWithGoogle.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.error.message || "Login failed";
-      })
-
-      // Signup
-      .addCase(signup.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(signup.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token || null;
-        state.isAuthenticated = true;
-        state.showAuthModal = false;
-        state.error = null;
-      })
-      .addCase(signup.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.error.message || "Signup failed";
-      })
-
-      // Logout
-      .addCase(logout.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(logout.fulfilled, (state) => {
-        state.isLoading = false;
-        state.user = null;
-        state.token = null;
-        state.isAuthenticated = false;
-        state.error = null;
-      })
-      .addCase(logout.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.error.message || "Logout failed";
-      });
-
     // Handle global store reset
     builder.addCase(resetStore, () => {
       return initialState;
     });
 
-    // Handle redux-persist REHYDRATE action (must come after all addCase calls)
+    // Handle redux-persist REHYDRATE action
     builder.addMatcher(
       (action) => action.type === "persist/REHYDRATE",
       (state, action: any) => {
@@ -219,10 +183,104 @@ const authSlice = createSlice({
         }
       }
     );
+
+    // Handle RTK Query auth mutations
+    builder
+      .addMatcher(authApi.endpoints.login.matchPending, (state) => {
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.login.matchFulfilled, (state, action) => {
+        const { user, token } = action.payload;
+        state.user = user;
+        state.token = token;
+        state.isAuthenticated = true;
+        state.showAuthModal = false;
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.login.matchRejected, (state, action) => {
+        state.error = action.error.message || "Login failed";
+      })
+
+      .addMatcher(authApi.endpoints.signup.matchPending, (state) => {
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.signup.matchFulfilled, (state, action) => {
+        const { user, token } = action.payload;
+        state.user = user;
+        state.token = token;
+        state.isAuthenticated = true;
+        state.showAuthModal = false;
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.signup.matchRejected, (state, action) => {
+        state.error = action.error.message || "Signup failed";
+      })
+
+      .addMatcher(authApi.endpoints.loginWithGoogle.matchPending, (state) => {
+        state.error = null;
+      })
+      .addMatcher(
+        authApi.endpoints.loginWithGoogle.matchFulfilled,
+        (state, action) => {
+          const { user, token } = action.payload;
+          state.user = user;
+          state.token = token;
+          state.isAuthenticated = true;
+          state.showAuthModal = false;
+          state.error = null;
+        }
+      )
+      .addMatcher(
+        authApi.endpoints.loginWithGoogle.matchRejected,
+        (state, action) => {
+          state.error = action.error.message || "Google login failed";
+        }
+      )
+
+      .addMatcher(authApi.endpoints.logout.matchFulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.logout.matchRejected, (state, action) => {
+        // Still clear credentials even if API call fails
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.error = null;
+      })
+
+      .addMatcher(
+        authApi.endpoints.checkAuth.matchFulfilled,
+        (state, action) => {
+          state.isInitialized = true;
+          if (action.payload.isAuthenticated && action.payload.user) {
+            state.user = action.payload.user;
+            state.isAuthenticated = true;
+            state.error = null;
+          } else {
+            state.user = null;
+            state.token = null;
+            state.isAuthenticated = false;
+          }
+        }
+      )
+      .addMatcher(authApi.endpoints.checkAuth.matchRejected, (state) => {
+        state.isInitialized = true;
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.error = null;
+      });
   },
 });
 
+// Export actions
 export const {
+  setCredentials,
+  clearCredentials,
+  setInitialized,
   setError,
   clearError,
   showAuthModal,
@@ -230,5 +288,19 @@ export const {
   switchAuthMode,
   setAuthFromToken,
 } = authSlice.actions;
+
+// Selectors
+export const selectCurrentUser = (state: { auth: AuthState }) =>
+  state.auth.user;
+export const selectAuthToken = (state: { auth: AuthState }) => state.auth.token;
+export const selectIsAuthenticated = (state: { auth: AuthState }) =>
+  state.auth.isAuthenticated;
+export const selectIsInitialized = (state: { auth: AuthState }) =>
+  state.auth.isInitialized;
+export const selectAuthError = (state: { auth: AuthState }) => state.auth.error;
+export const selectShowAuthModal = (state: { auth: AuthState }) =>
+  state.auth.showAuthModal;
+export const selectAuthModalMode = (state: { auth: AuthState }) =>
+  state.auth.authModalMode;
 
 export default authSlice.reducer;

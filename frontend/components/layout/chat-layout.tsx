@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { logout } from "@/lib/features/auth/authSlice";
+import {
+  useLogoutMutation,
+  selectCurrentUser,
+  selectIsAuthenticated,
+} from "@/lib/features/auth/authSlice";
 import { clearStoreAndPersist } from "@/lib/store";
 import { SourcesPanel } from "./sources-panel";
 import ChatPanel from "./chat-panel";
@@ -17,7 +21,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Menu, X, ArrowLeft, LogOut, UserCircle } from "lucide-react";
+import {
+  Settings,
+  Menu,
+  X,
+  ArrowLeft,
+  LogOut,
+  UserCircle,
+  Loader2,
+} from "lucide-react";
 
 interface ChatLayoutProps {
   chatId: string;
@@ -26,7 +38,14 @@ interface ChatLayoutProps {
 export function ChatLayout({ chatId }: ChatLayoutProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+
+  // Modern selectors
+  const user = useAppSelector(selectCurrentUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+
+  // RTK Query logout mutation
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+
   const [isMobileSourcesOpen, setIsMobileSourcesOpen] = useState(false);
   const [isSourcesPanelCollapsed, setIsSourcesPanelCollapsed] = useState(false);
 
@@ -36,8 +55,8 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      // First call the logout API
-      await dispatch(logout()).unwrap();
+      // Call the logout mutation
+      await logout().unwrap();
     } catch (error) {
       // Even if logout API fails, we still want to clear local state
       console.warn("Logout API failed, but clearing local state:", error);
@@ -85,6 +104,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
             size="sm"
             className="sm:hidden h-8 w-8 p-0"
             onClick={() => setIsMobileSourcesOpen(!isMobileSourcesOpen)}
+            disabled={isLoggingOut}
           >
             {isMobileSourcesOpen ? (
               <X className="h-4 w-4" />
@@ -99,6 +119,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
               size="sm"
               onClick={handleBackToHome}
               className="h-8 w-8 p-0 mr-2"
+              disabled={isLoggingOut}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -113,7 +134,12 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            disabled={isLoggingOut}
+          >
             <Settings className="h-4 w-4" />
           </Button>
 
@@ -125,6 +151,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0 relative"
+                  disabled={isLoggingOut}
                 >
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium border border-primary/20">
                     {getUserInitials()}
@@ -143,11 +170,17 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  disabled={isLoggingOut}
+                >
                   <UserCircle className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  disabled={isLoggingOut}
+                >
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
@@ -155,9 +188,14 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
                 <DropdownMenuItem
                   className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
                   onClick={handleLogout}
+                  disabled={isLoggingOut}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
+                  {isLoggingOut ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="mr-2 h-4 w-4" />
+                  )}
+                  <span>{isLoggingOut ? "Signing out..." : "Logout"}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

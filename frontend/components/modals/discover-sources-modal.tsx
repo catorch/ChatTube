@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppSelector } from "@/lib/hooks";
-import { useAddSourcesMutation } from "@/lib/api/services/sources";
+import { useAddChatSourcesMutation } from "@/lib/features/sources/sourcesSlice";
 import {
   Dialog,
   DialogContent,
@@ -123,7 +123,8 @@ export function DiscoverSourcesModal({
   onClose,
 }: DiscoverSourcesModalProps) {
   const { currentChatId } = useAppSelector((state) => state.chat);
-  const [addSources, { isLoading: isAddingSource }] = useAddSourcesMutation();
+  const [addSources, { isLoading: isAddingSource }] =
+    useAddChatSourcesMutation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("trending");
 

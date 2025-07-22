@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
-  useListSourcesQuery,
-  useRemoveSourceMutation,
-} from "@/lib/api/services/sources";
+  useGetChatSourcesQuery,
+  useRemoveChatSourceMutation,
+  selectAllSourcesFromAdapter,
+} from "@/lib/features/sources/sourcesSlice";
 import {
   makeSelectIsProcessing,
   makeSelectProcessingCount,
@@ -16,6 +17,7 @@ import {
   toggleSourceSelection,
   selectAllSources,
   clearSourceSelection,
+  useGetChatMessagesQuery,
 } from "@/lib/features/chat/chatSlice";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,20 +124,83 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
   const processingCount = useAppSelector(selectProcessingCount);
   const completedCount = useAppSelector(selectCompletedCount);
 
+  // Track source statuses to detect when sources finish processing
+  const previousSourceStatusesRef = useRef<Map<string, string>>(new Map());
+
   // 🟢 RTK Query with automatic polling - one line does it all!
   const {
-    data: sources = [],
+    data: sourcesEntityState,
     isLoading: isInitialLoading, // Only true for initial load
     isFetching, // True during polling, but don't hide UI
     error: sourcesError,
-  } = useListSourcesQuery(currentChatId!, {
+  } = useGetChatSourcesQuery(currentChatId!, {
     skip: !currentChatId, // wait until we have a chat
     pollingInterval: isProcessing ? 5_000 : 0, // 5s while needed, stop when done
     refetchOnFocus: true, // nice-to-have
     refetchOnReconnect: true, // nice-to-have
   });
 
-  const [removeSource] = useRemoveSourceMutation();
+  // Convert normalized entity state to array for UI
+  const sources = sourcesEntityState
+    ? selectAllSourcesFromAdapter(sourcesEntityState).map((source) => ({
+        id: source.id,
+        chatId: source.chatId,
+        kind: source.kind,
+        title: source.title || `${source.kind} source`,
+        url: source.url,
+        thumbnail: source.metadata.thumbnailUrl,
+        description: source.metadata.description,
+        status: source.metadata.processingStatus || "pending",
+        lastUpdated: source.updatedAt,
+        metadata: source.metadata,
+      }))
+    : [];
+
+  // Refetch chat messages query to get fresh data when sources complete
+  const { refetch: refetchChatMessages } = useGetChatMessagesQuery(
+    { chatId: currentChatId! },
+    { skip: !currentChatId }
+  );
+
+  // Automatically refetch chat data when sources complete processing
+  useEffect(() => {
+    if (!currentChatId || !sources.length) return;
+
+    const currentStatuses = new Map(sources.map((s) => [s.id, s.status]));
+    const previousStatuses = previousSourceStatusesRef.current;
+
+    // Check if any source moved from processing to completed
+    let hasNewlyCompletedSources = false;
+    for (const [sourceId, currentStatus] of currentStatuses) {
+      const previousStatus = previousStatuses.get(sourceId);
+      if (previousStatus === "processing" && currentStatus === "completed") {
+        hasNewlyCompletedSources = true;
+        break;
+      }
+    }
+
+    // If we found newly completed sources, refetch chat data
+    if (hasNewlyCompletedSources) {
+      console.log("🔄 Sources completed processing, refetching chat data...");
+      refetchChatMessages();
+    }
+
+    // Update the ref for next comparison
+    previousSourceStatusesRef.current = currentStatuses;
+  }, [sources, currentChatId, refetchChatMessages]);
+
+  // Reset the ref when chat changes
+  useEffect(() => {
+    if (sources.length > 0) {
+      previousSourceStatusesRef.current = new Map(
+        sources.map((s) => [s.id, s.status])
+      );
+    } else {
+      previousSourceStatusesRef.current = new Map();
+    }
+  }, [currentChatId]);
+
+  const [removeSource] = useRemoveChatSourceMutation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

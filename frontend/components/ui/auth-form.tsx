@@ -13,7 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { login, signup, loginWithGoogle } from "@/lib/features/auth/authSlice";
+import {
+  useLoginMutation,
+  useSignupMutation,
+  useLoginWithGoogleMutation,
+  selectAuthError,
+  clearError,
+} from "@/lib/features/auth/authSlice";
 import { cn } from "@/lib/utils";
 
 // --------------------------------
@@ -239,7 +245,15 @@ interface AuthSignInProps {
 
 function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
   const dispatch = useAppDispatch();
-  const { isLoading, error } = useAppSelector((state) => state.auth);
+  const authError = useAppSelector(selectAuthError);
+
+  // RTK Query mutations
+  const [login, { isLoading: isLoginLoading }] = useLoginMutation();
+  const [loginWithGoogle, { isLoading: isGoogleLoading }] =
+    useLoginWithGoogleMutation();
+
+  const isLoading = isLoginLoading || isGoogleLoading;
+
   const [formState, setFormState] = React.useState<FormState>({
     showPassword: false,
   });
@@ -253,12 +267,26 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
     defaultValues: { email: "", password: "" },
   });
 
+  // Clear error when component mounts or view changes
+  React.useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
+
   const onSubmit = async (data: SignInFormValues) => {
-    dispatch(login(data));
+    try {
+      await login(data).unwrap();
+    } catch (error) {
+      // Error is automatically handled by the auth slice
+      console.error("Login failed:", error);
+    }
   };
 
-  const handleGoogleSuccess = (token: string) => {
-    dispatch(loginWithGoogle({ token }));
+  const handleGoogleSuccess = async (token: string) => {
+    try {
+      await loginWithGoogle({ token }).unwrap();
+    } catch (error) {
+      console.error("Google login failed:", error);
+    }
   };
 
   return (
@@ -277,7 +305,7 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
         </p>
       </div>
 
-      <AuthError message={error} />
+      <AuthError message={authError} />
 
       <AuthForm onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-2">
@@ -345,7 +373,7 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
         </div>
 
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? (
+          {isLoginLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Signing in...
@@ -387,7 +415,15 @@ interface AuthSignUpProps {
 
 function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   const dispatch = useAppDispatch();
-  const { isLoading, error } = useAppSelector((state) => state.auth);
+  const authError = useAppSelector(selectAuthError);
+
+  // RTK Query mutations
+  const [signup, { isLoading: isSignupLoading }] = useSignupMutation();
+  const [loginWithGoogle, { isLoading: isGoogleLoading }] =
+    useLoginWithGoogleMutation();
+
+  const isLoading = isSignupLoading || isGoogleLoading;
+
   const [formState, setFormState] = React.useState<FormState>({
     showPassword: false,
   });
@@ -411,19 +447,31 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
 
   const terms = watch("terms");
 
+  // Clear error when component mounts or view changes
+  React.useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
+
   const onSubmit = async (data: SignUpFormValues) => {
-    dispatch(
-      signup({
+    try {
+      await signup({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
-      })
-    );
+      }).unwrap();
+    } catch (error) {
+      // Error is automatically handled by the auth slice
+      console.error("Signup failed:", error);
+    }
   };
 
-  const handleGoogleSuccess = (token: string) => {
-    dispatch(loginWithGoogle({ token }));
+  const handleGoogleSuccess = async (token: string) => {
+    try {
+      await loginWithGoogle({ token }).unwrap();
+    } catch (error) {
+      console.error("Google login failed:", error);
+    }
   };
 
   return (
@@ -444,7 +492,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
         </p>
       </div>
 
-      <AuthError message={error} />
+      <AuthError message={authError} />
 
       <AuthForm onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-2 gap-4">
@@ -564,7 +612,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
         )}
 
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? (
+          {isSignupLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating account...

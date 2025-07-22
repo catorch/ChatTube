@@ -7,15 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
-  loadChatList,
-  deleteChat,
-  renameChatTitle,
-  updateChatTitleOptimistic,
-  clearMessages,
   setCurrentChatId,
+  useGetUserChatsQuery,
+  useDeleteChatMutation,
+  useUpdateChatMutation,
+  selectAllChats,
+  chatsAdapter,
+  Chat,
 } from "@/lib/features/chat/chatSlice";
-import { showAuthModal } from "@/lib/features/auth/authSlice";
-import { chatApi } from "@/lib/api/services/chat";
+import {
+  showAuthModal,
+  selectIsAuthenticated,
+} from "@/lib/features/auth/authSlice";
+import { useCreateChatMutation } from "@/lib/features/chat/chatSlice";
 import {
   Plus,
   Search,
@@ -60,14 +64,6 @@ import {
 } from "@/components/ui/dialog";
 import { useDebouncedCallback } from "use-debounce";
 
-interface Chat {
-  id: string;
-  title: string;
-  lastMessage: string;
-  timestamp: Date;
-  messageCount: number;
-}
-
 type SortBy = "date" | "title" | "messages";
 type SortOrder = "asc" | "desc";
 type ViewMode = "grid" | "list";
@@ -77,10 +73,24 @@ interface WelcomePageProps {}
 export function WelcomePage({}: WelcomePageProps = {}) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { chatList, chatListLoading, chatListError } = useAppSelector(
-    (state) => state.chat
-  );
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
+
+  // Modern selectors
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+
+  // RTK Query hooks
+  const {
+    data: chatsEntityState,
+    isLoading: chatsLoading,
+    error: chatsError,
+    refetch: refetchChats,
+  } = useGetUserChatsQuery({ page: 1, limit: 20 }, { skip: !isAuthenticated });
+
+  const [createChat, { isLoading: isCreatingChat }] = useCreateChatMutation();
+  const [deleteChat] = useDeleteChatMutation();
+  const [updateChat] = useUpdateChatMutation();
+
+  // Get chats from entity state
+  const chatList = chatsEntityState ? selectAllChats(chatsEntityState) : [];
 
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -93,18 +103,12 @@ export function WelcomePage({}: WelcomePageProps = {}) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Load chat list on component mount only if authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      dispatch(loadChatList({}));
-    }
-  }, [dispatch, isAuthenticated]);
-
   const filteredAndSortedChats = chatList
     .filter(
       (chat) =>
         chat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
+        (chat.lastMessage &&
+          chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()))
     )
     .sort((a, b) => {
       let comparison = 0;
@@ -112,13 +116,13 @@ export function WelcomePage({}: WelcomePageProps = {}) {
       switch (sortBy) {
         case "date":
           comparison =
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+            new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
           break;
         case "title":
           comparison = a.title.localeCompare(b.title);
           break;
         case "messages":
-          comparison = a.messageCount - b.messageCount;
+          comparison = (a.messageCount || 0) - (b.messageCount || 0);
           break;
       }
 
@@ -137,7 +141,6 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     setCurrentPage(1);
   }, [searchQuery, sortBy, sortOrder]);
 
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
   const creatingRef = useRef(false);
   const lastCallRef = useRef(0);
 
@@ -172,12 +175,11 @@ export function WelcomePage({}: WelcomePageProps = {}) {
       console.log("✅ Setting creation flags to true");
       lastCallRef.current = now;
       creatingRef.current = true;
-      setIsCreatingChat(true);
 
       try {
         console.log("📡 Making API call to create chat...");
-        const response = await chatApi.createChat();
-        const newChatId = response.chat._id;
+        const response = await createChat({ title: "New Chat" }).unwrap();
+        const newChatId = response.chat.id;
         console.log("✅ Chat created successfully:", newChatId);
 
         // Navigate to the new chat
@@ -187,10 +189,9 @@ export function WelcomePage({}: WelcomePageProps = {}) {
       } finally {
         console.log("🔄 Setting creation flags to false");
         creatingRef.current = false;
-        setIsCreatingChat(false);
       }
     },
-    [isCreatingChat, router]
+    [isCreatingChat, router, createChat]
   );
 
   const handleChatClick = (chatId: string) => {
@@ -198,26 +199,18 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     router.push(`/chat/${chatId}`);
   };
 
-  // Debounced function for optimistic updates (faster feedback)
-  const debouncedOptimisticUpdate = useDebouncedCallback(
-    (chatId: string, title: string, originalTitle: string) => {
-      if (title.trim() && title.trim() !== originalTitle) {
-        dispatch(
-          updateChatTitleOptimistic({
-            chatId,
-            title: title.trim(),
-          })
-        );
-      }
-    },
-    200 // 200ms delay for UI updates
-  );
-
   // Debounced function to save title changes to API
   const debouncedSaveTitle = useDebouncedCallback(
-    (chatId: string, title: string, originalTitle: string) => {
+    async (chatId: string, title: string, originalTitle: string) => {
       if (title.trim() && title.trim() !== originalTitle) {
-        dispatch(renameChatTitle({ chatId, title: title.trim() }));
+        try {
+          await updateChat({
+            chatId,
+            updates: { title: title.trim() },
+          }).unwrap();
+        } catch (error) {
+          console.error("Failed to update chat title:", error);
+        }
       }
     },
     1000 // 1 second delay for API calls
@@ -233,22 +226,24 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     setEditingTitle(newTitle);
 
     if (editingChatId) {
-      // Debounced optimistic update (200ms) for UI feedback
-      debouncedOptimisticUpdate(editingChatId, newTitle, originalTitle);
-
       // Debounced API call (1000ms) to persist the change
       debouncedSaveTitle(editingChatId, newTitle, originalTitle);
     }
   };
 
-  const handleRenameConfirm = () => {
+  const handleRenameConfirm = async () => {
     // Force immediate save and exit editing mode
     if (editingChatId && editingTitle.trim()) {
       const currentChat = chatList.find((chat) => chat.id === editingChatId);
       if (currentChat && editingTitle.trim() !== currentChat.title) {
-        dispatch(
-          renameChatTitle({ chatId: editingChatId, title: editingTitle.trim() })
-        );
+        try {
+          await updateChat({
+            chatId: editingChatId,
+            updates: { title: editingTitle.trim() },
+          }).unwrap();
+        } catch (error) {
+          console.error("Failed to update chat title:", error);
+        }
       }
     }
     setEditingChatId(null);
@@ -265,9 +260,13 @@ export function WelcomePage({}: WelcomePageProps = {}) {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (chatToDelete) {
-      dispatch(deleteChat(chatToDelete));
+      try {
+        await deleteChat(chatToDelete).unwrap();
+      } catch (error) {
+        console.error("Failed to delete chat:", error);
+      }
     }
     setDeleteDialogOpen(false);
     setChatToDelete(null);
@@ -285,6 +284,13 @@ export function WelcomePage({}: WelcomePageProps = {}) {
       year: "numeric",
     });
   };
+
+  // Convert chats error to string for display
+  const chatListError = chatsError
+    ? (chatsError as any)?.data?.message ||
+      (chatsError as any)?.message ||
+      "Failed to load conversations"
+    : null;
 
   return (
     <div className="h-full flex flex-col relative">
@@ -405,14 +411,14 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                       {chatListError}
                     </p>
                     <Button
-                      onClick={() => dispatch(loadChatList({}))}
+                      onClick={() => refetchChats()}
                       variant="outline"
                       className="px-6 py-3 rounded-xl border-border/50 bg-background/50 backdrop-blur-sm hover:bg-background/80 transition-all duration-300 hover-lift"
                     >
                       Try Again
                     </Button>
                   </div>
-                ) : chatListLoading && (!chatList || chatList.length === 0) ? (
+                ) : chatsLoading && chatList.length === 0 ? (
                   <div className="text-center py-20">
                     <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-primary/10 animate-pulse">
                       <MessageCircle className="h-10 w-10 text-primary" />
@@ -728,7 +734,7 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                     >
                                       <div className="flex items-center justify-end gap-2">
                                         <MessageSquare className="h-3.5 w-3.5" />
-                                        <span>{chat.messageCount}</span>
+                                        <span>{chat.messageCount || 0}</span>
                                       </div>
                                     </td>
                                     <td
@@ -738,7 +744,7 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                       <div className="flex items-center justify-end gap-2">
                                         <CalendarDays className="h-3.5 w-3.5" />
                                         <span>
-                                          {formatDate(chat.timestamp)}
+                                          {formatDate(chat.updatedAt)}
                                         </span>
                                       </div>
                                     </td>
@@ -874,17 +880,17 @@ export function WelcomePage({}: WelcomePageProps = {}) {
                                         className="text-muted-foreground line-clamp-3 leading-relaxed cursor-pointer"
                                         onClick={() => handleChatClick(chat.id)}
                                       >
-                                        {chat.lastMessage}
+                                        {chat.lastMessage || "No messages yet"}
                                       </p>
                                     </div>
                                     <div className="flex items-center justify-between pt-4 border-t border-border/30">
                                       <span className="flex items-center gap-2 text-sm text-muted-foreground">
                                         <MessageCircle className="h-4 w-4" />
-                                        {chat.messageCount} messages
+                                        {chat.messageCount || 0} messages
                                       </span>
                                       <span className="flex items-center gap-2 text-sm text-muted-foreground">
                                         <Clock className="h-4 w-4" />
-                                        {formatDate(chat.timestamp)}
+                                        {formatDate(chat.updatedAt)}
                                       </span>
                                     </div>
                                   </>

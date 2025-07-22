@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAppSelector } from "@/lib/hooks";
-import { useAddSourcesMutation } from "@/lib/features/sources/sourcesSlice";
+import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { addSources } from "@/lib/features/sources/sourcesSlice";
 import {
   Dialog,
   DialogContent,
@@ -68,9 +68,11 @@ const sourceTypes = [
 ];
 
 export function AddSourceModal({ isOpen, onClose }: AddSourceModalProps) {
+  const dispatch = useAppDispatch();
   const { currentChatId } = useAppSelector((state) => state.chat);
-  const [addSources, { isLoading: isAddingSource, error: addSourceError }] =
-    useAddSourcesMutation();
+  const { isAdding: isAddingSource, addError: addSourceError } = useAppSelector(
+    (state) => state.sources
+  );
 
   const [selectedType, setSelectedType] = useState<string>("youtube");
   const [url, setUrl] = useState("");
@@ -103,10 +105,12 @@ export function AddSourceModal({ isOpen, onClose }: AddSourceModalProps) {
           : undefined,
       };
 
-      await addSources({
-        chatId: currentChatId,
-        sources: [sourceRequest],
-      }).unwrap();
+      await dispatch(
+        addSources({
+          chatId: currentChatId,
+          sources: [sourceRequest],
+        })
+      ).unwrap();
 
       // Reset form and close modal on success
       setUrl("");
@@ -279,22 +283,7 @@ export function AddSourceModal({ isOpen, onClose }: AddSourceModalProps) {
                 <div>
                   <p className="font-medium text-sm">Failed to add source</p>
                   <p className="text-sm">
-                    {(() => {
-                      if (!addSourceError) return "An error occurred";
-                      if ("data" in addSourceError) {
-                        return (
-                          (addSourceError.data as any)?.message ||
-                          "An error occurred"
-                        );
-                      }
-                      if ("message" in addSourceError) {
-                        return addSourceError.message || "An error occurred";
-                      }
-                      if ("error" in addSourceError) {
-                        return addSourceError.error || "An error occurred";
-                      }
-                      return "An error occurred";
-                    })()}
+                    {addSourceError || "An error occurred"}
                   </p>
                 </div>
               </div>

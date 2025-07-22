@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAppSelector } from "@/lib/hooks";
-import { useAddSourcesMutation } from "@/lib/features/sources/sourcesSlice";
+import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { addSources } from "@/lib/features/sources/sourcesSlice";
 import {
   Dialog,
   DialogContent,
@@ -122,8 +122,9 @@ export function DiscoverSourcesModal({
   isOpen,
   onClose,
 }: DiscoverSourcesModalProps) {
+  const dispatch = useAppDispatch();
   const { currentChatId } = useAppSelector((state) => state.chat);
-  const [addSources, { isLoading: isAddingSource }] = useAddSourcesMutation();
+  const { isAdding: isAddingSource } = useAppSelector((state) => state.sources);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("trending");
 
@@ -163,22 +164,24 @@ export function DiscoverSourcesModal({
     }
 
     try {
-      const result = await addSources({
-        chatId: currentChatId,
-        sources: [
-          {
-            kind: source.kind,
-            url: source.url,
-            title: source.name,
-            metadata: {
-              description: source.description,
-              channel: source.channel,
-              views: source.views,
-              duration: source.duration,
+      const result = await dispatch(
+        addSources({
+          chatId: currentChatId,
+          sources: [
+            {
+              kind: source.kind,
+              url: source.url,
+              title: source.name,
+              metadata: {
+                description: source.description,
+                channel: source.channel,
+                views: source.views,
+                duration: source.duration,
+              },
             },
-          },
-        ],
-      });
+          ],
+        })
+      );
 
       if ("error" in result) {
         throw new Error("Failed to add source");

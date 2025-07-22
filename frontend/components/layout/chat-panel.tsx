@@ -17,9 +17,13 @@ import {
   selectAllMessages,
   Message,
 } from "@/lib/features/chat/chatSlice";
-import { useListSourcesQuery } from "@/lib/features/sources/sourcesSlice";
+import {
+  loadChatSources,
+  makeSelectSourcesForChat,
+} from "@/lib/features/sources/sourcesSlice";
 import { chatApi } from "@/lib/api/services/chat";
 import { Button } from "@/components/ui/button";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ChatBubble } from "@/components/ui/chat-bubble";
@@ -135,9 +139,12 @@ export default function ChatPanel() {
   } = useAppSelector((state) => state.chat);
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
   const currentChat = useAppSelector(selectCurrentChat);
-  const { data: chatSources = [] } = useListSourcesQuery(currentChatId!, {
-    skip: !currentChatId,
-  });
+
+  // Create a memoized selector instance for this component
+  const selectChatSources = useMemo(() => makeSelectSourcesForChat(), []);
+  const chatSources = useAppSelector((state) =>
+    currentChatId ? selectChatSources(state, currentChatId) : []
+  );
   const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -218,6 +225,13 @@ export default function ChatPanel() {
 
     initializeChat();
   }, [currentChatId, dispatch, isAuthenticated, user, routeChatId]);
+
+  // Load sources when chat changes
+  useEffect(() => {
+    if (currentChatId && isAuthenticated) {
+      dispatch(loadChatSources(currentChatId));
+    }
+  }, [currentChatId, dispatch, isAuthenticated]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

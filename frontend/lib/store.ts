@@ -3,8 +3,8 @@ import { persistStore, persistReducer, createTransform } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import authReducer from "./features/auth/authSlice";
 import chatReducer from "./features/chat/chatSlice";
+import sourcesReducer from "./features/sources/sourcesSlice";
 import { resetStore } from "./types";
-import { api } from "./api/base";
 import logger from "./middleware/logger";
 
 // Transform for redux-persist (all slices now use ISO strings, so no date conversion needed)
@@ -24,7 +24,7 @@ const persistConfig = {
   key: "chattube-root",
   storage,
   // Only persist essential data, exclude loading states and errors
-  whitelist: ["auth", "chat"],
+  whitelist: ["auth", "chat", "sources"],
   transforms: [dateTransform],
 };
 
@@ -44,15 +44,38 @@ const chatPersistConfig = {
   transforms: [dateTransform],
 };
 
+// Sources slice persist config - exclude loading states
+const sourcesPersistConfig = {
+  key: "sources",
+  storage,
+  blacklist: [
+    "isLoading",
+    "error",
+    "isAdding",
+    "addError",
+    "isRemoving",
+    "removeError",
+    "isSearching",
+    "searchError",
+    "statusLoading",
+    "statusErrors",
+  ],
+  transforms: [dateTransform],
+};
+
 // Create persisted reducers
 const persistedAuthReducer = persistReducer(authPersistConfig, authReducer);
 const persistedChatReducer = persistReducer(chatPersistConfig, chatReducer);
+const persistedSourcesReducer = persistReducer(
+  sourcesPersistConfig,
+  sourcesReducer
+);
 
 export const store = configureStore({
   reducer: {
     auth: persistedAuthReducer,
     chat: persistedChatReducer,
-    [api.reducerPath]: api.reducer,
+    sources: persistedSourcesReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -61,12 +84,13 @@ export const store = configureStore({
           "persist/PERSIST",
           "persist/REHYDRATE",
           "chat/addMessage",
+          "sources/addSource",
           "global/resetStore",
         ],
         // All date fields now use ISO strings, so no ignored paths needed
         ignoredPaths: [],
       },
-    }).concat(api.middleware),
+    }),
   // .concat(logger),
 });
 

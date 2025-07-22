@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
   loadChatSources,
@@ -50,18 +51,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const getSourceIcon = (kind: string) => {
+const getSourceIcon = (kind: string, className?: string) => {
+  const iconClass = className || "h-4 w-4";
+  const iconProps = { className: iconClass };
+  
   switch (kind) {
     case "youtube":
-      return <Youtube className="h-4 w-4" />;
+      return <Youtube {...iconProps} className={`${iconClass} text-red-500`} />;
     case "pdf":
-      return <FileText className="h-4 w-4" />;
+      return <FileText {...iconProps} className={`${iconClass} text-red-600`} />;
     case "web":
-      return <Globe className="h-4 w-4" />;
+      return <Globe {...iconProps} className={`${iconClass} text-blue-500`} />;
     case "file":
-      return <Upload className="h-4 w-4" />;
+      return <Upload {...iconProps} className={`${iconClass} text-purple-500`} />;
     default:
-      return <FileText className="h-4 w-4" />;
+      return <FileText {...iconProps} className={`${iconClass} text-gray-500`} />;
   }
 };
 
@@ -69,13 +73,20 @@ const getStatusIcon = (status: string) => {
   switch (status) {
     case "pending":
     case "processing":
-      return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
+      return (
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <Loader2 className="h-3.5 w-3.5 text-blue-500" />
+        </motion.div>
+      );
     case "completed":
-      return <CheckCircle className="h-3 w-3 text-green-500" />;
+      return <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />;
     case "failed":
-      return <AlertCircle className="h-3 w-3 text-red-500" />;
+      return <AlertCircle className="h-3.5 w-3.5 text-red-500" />;
     default:
-      return <Clock className="h-3 w-3 text-gray-400" />;
+      return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
   }
 };
 
@@ -191,52 +202,122 @@ export function SourcesPanel({
 
   if (isCollapsed) {
     return (
-      <div className="w-12 h-full bg-surface-1 border-r border-border flex flex-col items-center py-4 gap-2">
-        <Button
-          size="icon"
-          variant="default"
-          onClick={() => setIsAddModalOpen(true)}
-          className="h-8 w-8"
-          disabled={!chatId}
+      <motion.div 
+        className="w-14 h-full bg-gradient-to-b from-surface-1 to-surface-2/50 border-r border-border/70 flex flex-col items-center py-6 gap-3 backdrop-blur-sm"
+        initial={{ width: 0, opacity: 0 }}
+        animate={{ width: 56, opacity: 1 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      >
+        <motion.div
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
         >
-          <Plus className="h-4 w-4" />
-        </Button>
-        {sources.length > 0 && (
-          <Badge variant="secondary" className="text-xs">
-            {completedCount}
-          </Badge>
-        )}
-        {processingCount > 0 && (
-          <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-        )}
-      </div>
+          <Button
+            size="icon"
+            variant="default"
+            onClick={() => setIsAddModalOpen(true)}
+            className="h-9 w-9 lux-gradient shadow-lg hover:shadow-xl transition-all duration-200"
+            disabled={!chatId}
+            title="Add Source"
+          >
+            <Plus className="h-4 w-4 text-white" />
+          </Button>
+        </motion.div>
+        
+        <AnimatePresence>
+          {sources.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+            >
+              <Badge 
+                variant="secondary" 
+                className="text-xs bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300 shadow-sm"
+              >
+                {completedCount}
+              </Badge>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <AnimatePresence>
+          {processingCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="relative"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <Loader2 className="h-4 w-4 text-blue-500" />
+              </motion.div>
+              <Badge 
+                variant="outline" 
+                className="absolute -top-1 -right-1 h-4 w-4 text-xs p-0 flex items-center justify-center bg-blue-500 text-white border-blue-500"
+              >
+                {processingCount}
+              </Badge>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     );
   }
 
   return (
-    <div className="w-80 h-full bg-surface-1 border-r border-border flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Sources</h2>
-            {processingCount > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {processingCount} processing
-              </Badge>
-            )}
+    <motion.div 
+      className="w-80 h-full bg-gradient-to-b from-surface-1 to-surface-2/30 border-r border-border/70 flex flex-col backdrop-blur-sm"
+      initial={{ x: -320, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
+      {/* Enhanced Header */}
+      <div className="p-6 border-b border-border/50 bg-gradient-to-r from-surface-1/80 to-surface-1/60 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 lux-gradient rounded-lg flex items-center justify-center shadow-md">
+              <Globe className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Sources</h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                {processingCount > 0 && (
+                  <Badge variant="secondary" className="text-xs bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300">
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                      className="w-2 h-2 bg-blue-500 rounded-full mr-1.5"
+                    />
+                    {processingCount} processing
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handleRefreshSources}
-            disabled={isInitialLoading}
-            className="h-8 w-8"
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <RefreshCw
-              className={`h-4 w-4 ${isInitialLoading ? "animate-spin" : ""}`}
-            />
-          </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleRefreshSources}
+              disabled={isInitialLoading}
+              className="h-9 w-9 rounded-lg hover:bg-primary/10 transition-all duration-200"
+              title="Refresh sources"
+            >
+              <motion.div
+                animate={isInitialLoading ? { rotate: 360 } : {}}
+                transition={isInitialLoading ? { duration: 1, repeat: Infinity, ease: "linear" } : {}}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </motion.div>
+            </Button>
+          </motion.div>
         </div>
 
         {!chatId ? (
@@ -247,80 +328,125 @@ export function SourcesPanel({
           </div>
         ) : (
           <>
-            {/* Search */}
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Enhanced Search */}
+            <div className="relative mb-4 group">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 rounded-xl opacity-0 group-focus-within:opacity-100 transition-all duration-300 blur-sm" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70 group-focus-within:text-primary transition-colors duration-200 z-10" />
               <input
                 type="text"
                 placeholder="Search sources..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary bg-background"
+                className="w-full pl-10 pr-4 py-3 text-sm border-2 border-border/50 rounded-xl focus:outline-none focus:border-primary/50 bg-background/95 backdrop-blur-sm transition-all duration-200 relative z-10 placeholder:text-muted-foreground/60"
+                aria-label="Search sources"
               />
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 mb-3">
-              <Button
-                variant="default"
-                className="flex-1 text-sm font-medium"
-                onClick={() => setIsAddModalOpen(true)}
-                disabled={!chatId}
+            {/* Enhanced Action Buttons */}
+            <div className="flex gap-3 mb-4">
+              <motion.div
+                className="flex-1"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Plus className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline">Add</span>
-                <span className="xs:hidden">+</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 text-sm"
-                onClick={() => setIsDiscoverModalOpen(true)}
-                disabled={!chatId}
+                <Button
+                  variant="default"
+                  className="w-full text-sm font-semibold lux-gradient shadow-lg hover:shadow-xl transition-all duration-200"
+                  onClick={() => setIsAddModalOpen(true)}
+                  disabled={!chatId}
+                >
+                  <Plus className="h-4 w-4 mr-2 text-white" />
+                  <span>Add Source</span>
+                </Button>
+              </motion.div>
+              <motion.div
+                className="flex-1"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Search className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline">Discover</span>
-                <span className="xs:hidden">🔍</span>
-              </Button>
+                <Button
+                  variant="outline"
+                  className="w-full text-sm font-medium border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                  onClick={() => setIsDiscoverModalOpen(true)}
+                  disabled={!chatId}
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  <span>Discover</span>
+                </Button>
+              </motion.div>
             </div>
 
-            {/* Select All */}
-            {filteredSources.length > 0 && (
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSelectAll}
-                  className="text-xs h-7"
+            {/* Enhanced Select All */}
+            <AnimatePresence>
+              {filteredSources.length > 0 && (
+                <motion.div 
+                  className="flex items-center justify-between"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
                 >
-                  {isAllSelected ? (
-                    <CheckSquare className="h-3 w-3 mr-1" />
-                  ) : (
-                    <Square className="h-3 w-3 mr-1" />
-                  )}
-                  {isAllSelected ? "Deselect All" : "Select All"}
-                </Button>
-                {selectedSourceIds.length > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    {selectedSourceIds.length} selected
-                  </Badge>
-                )}
-              </div>
-            )}
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      className="text-xs h-8 px-3 rounded-lg hover:bg-primary/10 transition-all duration-200"
+                    >
+                      <motion.div
+                        animate={isAllSelected ? { scale: [1, 1.2, 1] } : {}}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {isAllSelected ? (
+                          <CheckSquare className="h-3.5 w-3.5 mr-2 text-primary" />
+                        ) : (
+                          <Square className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                        )}
+                      </motion.div>
+                      {isAllSelected ? "Deselect All" : "Select All"}
+                    </Button>
+                  </motion.div>
+                  <AnimatePresence>
+                    {selectedSourceIds.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                      >
+                        <Badge variant="secondary" className="text-xs bg-primary/10 border-primary/20 text-primary shadow-sm">
+                          <span className="w-1.5 h-1.5 bg-primary rounded-full mr-1.5" />
+                          {selectedSourceIds.length} selected
+                        </Badge>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      {/* Enhanced Content */}
+      <div className="flex-1 overflow-hidden relative">
         {!chatId ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <Globe className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                Create or select a chat to add sources
+          <motion.div 
+            className="h-full flex items-center justify-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="text-center px-6">
+              <motion.div
+                className="w-16 h-16 mx-auto mb-4 lux-gradient rounded-full flex items-center justify-center floating shadow-lg"
+                whileHover={{ scale: 1.05 }}
+              >
+                <Globe className="h-8 w-8 text-white" />
+              </motion.div>
+              <h3 className="text-lg font-semibold mb-2 text-foreground">Ready to Add Sources</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Create or select a chat to start adding your content sources
               </p>
             </div>
-          </div>
+          </motion.div>
         ) : isInitialLoading &&
           (!filteredSources || filteredSources.length === 0) ? (
           <div className="h-full overflow-y-auto p-4 space-y-2">
@@ -371,21 +497,38 @@ export function SourcesPanel({
             </div>
           </div>
         ) : filteredSources.length === 0 ? (
-          <div className="h-full flex items-center justify-center p-4">
+          <motion.div 
+            className="h-full flex items-center justify-center p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
             <div className="text-center">
-              <Globe className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <h3 className="font-medium mb-2">No sources yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Add YouTube videos, PDFs, or other sources to start chatting
+              <motion.div
+                className="w-20 h-20 mx-auto mb-6 lux-gradient rounded-full flex items-center justify-center floating shadow-lg"
+                whileHover={{ scale: 1.05 }}
+              >
+                <Globe className="h-10 w-10 text-white" />
+              </motion.div>
+              <h3 className="text-xl font-bold mb-3 text-foreground">No sources yet</h3>
+              <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-xs">
+                Add YouTube videos, PDFs, web pages, or other sources to unlock AI-powered insights
               </p>
-              <Button onClick={() => setIsAddModalOpen(true)} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Source
-              </Button>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button 
+                  onClick={() => setIsAddModalOpen(true)} 
+                  className="lux-gradient shadow-lg hover:shadow-xl transition-all duration-200 px-6"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Source
+                </Button>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="h-full overflow-y-auto p-4 space-y-2">
+          <div className="h-full overflow-y-auto p-4 space-y-2 scrollbar-visible">
             {filteredSources.map((source: FrontendSource) => (
               <div
                 key={source.id}
@@ -467,15 +610,32 @@ export function SourcesPanel({
         )}
       </div>
 
-      {/* Footer */}
-      {chatId && sources.length > 0 && (
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{sources.length} total sources</span>
-            <span>{completedCount} ready for chat</span>
-          </div>
-        </div>
-      )}
+      {/* Enhanced Footer */}
+      <AnimatePresence>
+        {chatId && sources.length > 0 && (
+          <motion.div 
+            className="p-6 border-t border-border/50 bg-gradient-to-r from-surface-1/80 to-surface-1/60 backdrop-blur-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full" />
+                  <span className="text-sm font-medium text-muted-foreground">{sources.length} total</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_hsl(var(--emerald-500)/50%)]" />
+                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {completedCount} ready
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <AddSourceModal
@@ -486,6 +646,6 @@ export function SourcesPanel({
         isOpen={isDiscoverModalOpen}
         onClose={() => setIsDiscoverModalOpen(false)}
       />
-    </div>
+    </motion.div>
   );
 }

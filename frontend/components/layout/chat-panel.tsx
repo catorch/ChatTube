@@ -229,13 +229,6 @@ export default function ChatPanel({ chatId }: ChatPanelProps) {
     initializeChat();
   }, [chatId, dispatch, isAuthenticated, user, routeChatId]);
 
-  // Load sources when chat changes
-  useEffect(() => {
-    if (chatId && isAuthenticated) {
-      dispatch(loadChatSources(chatId));
-    }
-  }, [chatId, dispatch, isAuthenticated]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (

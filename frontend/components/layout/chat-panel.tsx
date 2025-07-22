@@ -125,13 +125,16 @@ const getMessageRadius = (
   }
 };
 
-export default function ChatPanel() {
+interface ChatPanelProps {
+  chatId: string;
+}
+
+export default function ChatPanel({ chatId }: ChatPanelProps) {
   const dispatch = useAppDispatch();
   const messages = useAppSelector(selectAllMessages);
   const {
     isLoading,
     currentInput,
-    currentChatId,
     selectedProvider,
     error,
     streamingMessageId,
@@ -143,7 +146,7 @@ export default function ChatPanel() {
   // Create a memoized selector instance for this component
   const selectChatSources = useMemo(() => makeSelectSourcesForChat(), []);
   const chatSources = useAppSelector((state) =>
-    currentChatId ? selectChatSources(state, currentChatId) : []
+    chatId ? selectChatSources(state, chatId) : []
   );
   const [inputValue, setInputValue] = useState("");
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -213,7 +216,7 @@ export default function ChatPanel() {
         return;
       }
 
-      if (!currentChatId && !routeChatId) {
+      if (!chatId && !routeChatId) {
         try {
           const response = await chatApi.createChat("New Chat");
           dispatch(setCurrentChatId(response.chat._id));
@@ -224,21 +227,21 @@ export default function ChatPanel() {
     };
 
     initializeChat();
-  }, [currentChatId, dispatch, isAuthenticated, user, routeChatId]);
+  }, [chatId, dispatch, isAuthenticated, user, routeChatId]);
 
   // Load sources when chat changes
   useEffect(() => {
-    if (currentChatId && isAuthenticated) {
-      dispatch(loadChatSources(currentChatId));
+    if (chatId && isAuthenticated) {
+      dispatch(loadChatSources(chatId));
     }
-  }, [currentChatId, dispatch, isAuthenticated]);
+  }, [chatId, dispatch, isAuthenticated]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !inputValue.trim() ||
       isLoading ||
-      !currentChatId ||
+      !chatId ||
       !isAuthenticated ||
       !hasAvailableSources
     )
@@ -256,7 +259,7 @@ export default function ChatPanel() {
     try {
       // Use streaming instead of regular send
       const streamController = await chatApi.streamMessage(
-        currentChatId,
+        chatId,
         {
           content,
           sourceIds: selectedSourceIds,
@@ -362,25 +365,23 @@ export default function ChatPanel() {
     // Only update local input state immediately for responsive typing
     setEditingTitle(newTitle);
 
-    if (currentChatId && currentChat) {
+    if (chatId && currentChat) {
       // Debounced optimistic update (200ms) for UI feedback
-      debouncedOptimisticUpdate(currentChatId, newTitle, currentChat.title);
+      debouncedOptimisticUpdate(chatId, newTitle, currentChat.title);
 
       // Debounced API call (1000ms) to persist the change
-      debouncedSaveTitle(currentChatId, newTitle, currentChat.title);
+      debouncedSaveTitle(chatId, newTitle, currentChat.title);
     }
   };
 
   const handleTitleSave = () => {
     // Force immediate save and exit editing mode
     if (
-      currentChatId &&
+      chatId &&
       editingTitle.trim() &&
       editingTitle.trim() !== currentChat?.title
     ) {
-      dispatch(
-        renameChatTitle({ chatId: currentChatId, title: editingTitle.trim() })
-      );
+      dispatch(renameChatTitle({ chatId, title: editingTitle.trim() }));
     }
     setIsEditingTitle(false);
     setEditingTitle("");

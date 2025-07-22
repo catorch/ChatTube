@@ -95,27 +95,29 @@ const getStatusText = (status: string) => {
 };
 
 interface SourcesPanelProps {
+  chatId: string;
   isCollapsed?: boolean;
 }
 
-export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
+export function SourcesPanel({
+  chatId,
+  isCollapsed = false,
+}: SourcesPanelProps) {
   const dispatch = useAppDispatch();
-  const { currentChatId, selectedSourceIds } = useAppSelector(
-    (state) => state.chat
-  );
+  const { selectedSourceIds } = useAppSelector((state) => state.chat);
 
   // Create memoized selectors for this chat
   const selectIsProcessing = useMemo(
-    () => (currentChatId ? makeSelectIsProcessing(currentChatId) : () => false),
-    [currentChatId]
+    () => (chatId ? makeSelectIsProcessing(chatId) : () => false),
+    [chatId]
   );
   const selectProcessingCount = useMemo(
-    () => (currentChatId ? makeSelectProcessingCount(currentChatId) : () => 0),
-    [currentChatId]
+    () => (chatId ? makeSelectProcessingCount(chatId) : () => 0),
+    [chatId]
   );
   const selectCompletedCount = useMemo(
-    () => (currentChatId ? makeSelectCompletedCount(currentChatId) : () => 0),
-    [currentChatId]
+    () => (chatId ? makeSelectCompletedCount(chatId) : () => 0),
+    [chatId]
   );
 
   // Get processing status from selectors
@@ -125,7 +127,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
 
   // Get sources from normalized state
   const sources = useAppSelector((state) =>
-    currentChatId ? selectSourcesForChat(state, currentChatId) : []
+    chatId ? selectSourcesForChat(state, chatId) : []
   );
   const {
     isLoading: isInitialLoading,
@@ -161,29 +163,27 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
   };
 
   const handleRemoveSource = async (sourceId: string) => {
-    if (!currentChatId) return;
+    if (!chatId) return;
 
     try {
-      await dispatch(
-        removeSource({ chatId: currentChatId, sourceId })
-      ).unwrap();
+      await dispatch(removeSource({ chatId, sourceId })).unwrap();
     } catch (error) {
       console.error("Failed to remove source:", error);
     }
   };
 
   const handleRefreshSources = () => {
-    if (currentChatId) {
-      dispatch(loadChatSources(currentChatId));
+    if (chatId) {
+      dispatch(loadChatSources(chatId));
     }
   };
 
   // Load sources when chat changes
   useEffect(() => {
-    if (currentChatId) {
-      dispatch(loadChatSources(currentChatId));
+    if (chatId) {
+      dispatch(loadChatSources(chatId));
     }
-  }, [currentChatId, dispatch]);
+  }, [chatId, dispatch]);
 
   const isAllSelected =
     selectedSourceIds.length === filteredSources.length &&
@@ -197,7 +197,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
           variant="default"
           onClick={() => setIsAddModalOpen(true)}
           className="h-8 w-8"
-          disabled={!currentChatId}
+          disabled={!chatId}
         >
           <Plus className="h-4 w-4" />
         </Button>
@@ -239,7 +239,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
           </Button>
         </div>
 
-        {!currentChatId ? (
+        {!chatId ? (
           <div className="text-center py-4">
             <p className="text-sm text-muted-foreground">
               Select a chat to view sources
@@ -265,7 +265,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
                 variant="default"
                 className="flex-1 text-sm font-medium"
                 onClick={() => setIsAddModalOpen(true)}
-                disabled={!currentChatId}
+                disabled={!chatId}
               >
                 <Plus className="h-4 w-4 mr-1 sm:mr-2" />
                 <span className="hidden xs:inline">Add</span>
@@ -275,7 +275,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
                 variant="outline"
                 className="flex-1 text-sm"
                 onClick={() => setIsDiscoverModalOpen(true)}
-                disabled={!currentChatId}
+                disabled={!chatId}
               >
                 <Search className="h-4 w-4 mr-1 sm:mr-2" />
                 <span className="hidden xs:inline">Discover</span>
@@ -312,7 +312,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {!currentChatId ? (
+        {!chatId ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Globe className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
@@ -444,7 +444,7 @@ export function SourcesPanel({ isCollapsed = false }: SourcesPanelProps) {
       </div>
 
       {/* Footer */}
-      {currentChatId && sources.length > 0 && (
+      {chatId && sources.length > 0 && (
         <div className="p-4 border-t border-border">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{sources.length} total sources</span>

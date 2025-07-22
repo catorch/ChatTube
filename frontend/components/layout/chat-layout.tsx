@@ -173,7 +173,7 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
             isSourcesPanelCollapsed ? "w-0" : "w-80"
           } transition-all duration-300 hidden sm:flex flex-col`}
         >
-          <SourcesPanel isCollapsed={isSourcesPanelCollapsed} />
+          <SourcesPanel chatId={chatId} isCollapsed={isSourcesPanelCollapsed} />
         </div>
 
         {/* Mobile Sources Panel Overlay */}
@@ -184,14 +184,14 @@ export function ChatLayout({ chatId }: ChatLayoutProps) {
               onClick={() => setIsMobileSourcesOpen(false)}
             />
             <div className="fixed left-0 top-0 bottom-0 w-80 z-50 sm:hidden bg-background border-r border-border shadow-xl">
-              <SourcesPanel isCollapsed={false} />
+              <SourcesPanel chatId={chatId} isCollapsed={false} />
             </div>
           </>
         )}
 
         {/* Chat Panel */}
         <div className="flex-1 flex flex-col">
-          <ChatPanel />
+          <ChatPanel chatId={chatId} />
         </div>
       </div>
     </div>
